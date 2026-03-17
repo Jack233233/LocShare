@@ -438,9 +438,9 @@ class MainActivity : AppCompatActivity() {
                     on(Socket.EVENT_CONNECT) {
                         android.util.Log.d("LocationShare", "Socket connected")
                         runOnUiThread {
-                            updateShareButtonState()
                             Toast.makeText(this@MainActivity, "已连接服务器", Toast.LENGTH_SHORT).show()
                             startSharingLocation()
+                            updateShareButtonState()
                         }
 
                         val data = JSONObject().apply {
