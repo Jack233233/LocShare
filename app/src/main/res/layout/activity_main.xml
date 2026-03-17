@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@android:color/black"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="位置共享"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"
+        android:gravity="center"
+        android:layout_marginBottom="8dp" />
+
+    <!-- 用户昵称设置 -->
+    <EditText
+        android:id="@+id/etUserName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="你的名字"
+        android:textColor="@android:color/white"
+        android:textColorHint="@android:color/white"
+        android:inputType="text"
+        android:maxLines="1" />
+
+    <!-- 模式选择 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="8dp">
+
+        <Button
+            android:id="@+id/btnModePair"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="双人共享"
+            style="?attr/materialButtonOutlinedStyle" />
+
+        <Button
+            android:id="@+id/btnModeMulti"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="多人共享"
+            style="?attr/materialButtonOutlinedStyle" />
+    </LinearLayout>
+
+    <!-- 双人模式区域 -->
+    <LinearLayout
+        android:id="@+id/layoutPairMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <!-- 添加好友按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnGenerateCode"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="生成配对码" />
+
+            <Button
+                android:id="@+id/btnInputCode"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="输入配对码" />
+        </LinearLayout>
+
+        <!-- 配对码显示区域 -->
+        <LinearLayout
+            android:id="@+id/layoutPairCodeDisplay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:background="@android:color/transparent"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:id="@+id/tvPairCode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textSize="32sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/holo_green_dark" />
+
+            <TextView
+                android:id="@+id/tvPairCodeHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="点击收起 | 5分钟内有效"
+                android:textSize="12sp"
+                android:textColor="@android:color/darker_gray" />
+        </LinearLayout>
+
+        <!-- 好友列表区域（可展开/收起） -->
+        <LinearLayout
+            android:id="@+id/layoutFriendsHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="好友列表"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white" />
+
+            <TextView
+                android:id="@+id/tvFriendCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="(0)"
+                android:textColor="@android:color/darker_gray"
+                android:textSize="14sp" />
+
+            <ImageView
+                android:id="@+id/ivExpandIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/arrow_down_float"
+                android:contentDescription="展开/收起" />
+        </LinearLayout>
+
+        <!-- 好友列表 -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerFriends"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxHeight="300dp"
+            android:visibility="visible" />
+    </LinearLayout>
+
+    <!-- 多人模式区域 -->
+    <LinearLayout
+        android:id="@+id/layoutMultiMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/etRoomId"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="房间号"
+            android:inputType="text" />
+    </LinearLayout>
+
+    <!-- 操作按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <Button
+            android:id="@+id/btnJoin"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="开始共享"
+            android:enabled="false" />
+
+        <ToggleButton
+            android:id="@+id/btnFollow"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="0.8"
+            android:textOn="跟随开启"
+            android:textOff="跟随关闭"
+            android:checked="false" />
+    </LinearLayout>
+
+    <com.amap.api.maps.MapView
+        android:id="@+id/mapView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp" />
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:padding="8dp"
+        android:text=""
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+</LinearLayout>
