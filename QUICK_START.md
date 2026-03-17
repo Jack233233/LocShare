@@ -84,6 +84,36 @@ File → Open → 选择 E:\Together\LocationShareApp
 4. 点击 **"开始共享"**
 5. 地图上会显示房间内所有人的位置
 
+### 路线管理功能（通勤场景）
+
+**功能介绍**：
+- 创建常用路线（如上班、回家路线）
+- 保存起点和终点位置
+- 设置自动共享的对象
+- 一键开始导航和位置共享
+
+**使用流程**：
+
+1. 点击主界面 **"路线"** 按钮进入路线管理
+2. 点击右下角 **"+"** 添加新路线
+3. 填写路线名称（如"上班路线"）
+4. 在地图页面输入**起点**和**终点**地址
+   - 输入时会有地址联想提示
+   - 从下拉列表选择准确地址
+   - 地图会显示起点（绿标）和终点（红标）
+5. 选择**自动共享给**哪位好友
+6. 点击**保存路线**
+
+**路线列表操作**：
+- 点击⭐收藏/取消收藏路线
+- 点击**开始**启动导航和位置共享（TODO）
+- 点击🗑️删除路线
+
+**TODO 功能**：
+- 实时导航显示
+- 到达检测自动停止共享
+- 路线编辑
+
 ### 单设备测试（只有一部手机）
 
 只有一台设备时，可以这样验证功能：
@@ -148,7 +178,9 @@ app/build/outputs/apk/release/app-release.apk
 
 ### 高德地图 Key
 
-已配置，如需更换请修改 `app/src/main/AndroidManifest.xml`：
+**Android SDK Key**（用于原生地图）：
+
+如需更换请修改 `app/src/main/AndroidManifest.xml`：
 
 ```xml
 <meta-data
@@ -157,7 +189,19 @@ app/build/outputs/apk/release/app-release.apk
 >
 ```
 
+**Web JS API Key**（用于路线地址搜索）：
+
+如需更换请修改 `RouteManagerActivity.kt`：
+
+```kotlin
+private val AMAP_WEB_KEY = "你的Web JS API Key"
+private val AMAP_SECURITY_KEY = "你的安全密钥"
+```
+
 申请地址：https://lbs.amap.com
+
+- Android SDK Key 平台：Android
+- Web JS API Key 平台：Web端(JS API)
 
 ### 服务器地址
 
@@ -306,14 +350,24 @@ API 接口通过 Nginx 代理，外部访问端口为 **80**。
 - 检查系统设置中的应用通知权限是否开启
 - 重启应用后重试
 
+### 7. 路线管理页面地图不显示
+
+**检查**：
+- Web JS API Key 是否正确配置
+- 安全密钥（securityJsCode）是否匹配
+- Key 是否启用了 **JS API** 权限
+- Referer 白名单是否留空或包含 `https://webapi.amap.com`
+- 查看 logcat 日志过滤 `WebView` 查看加载错误
+
 ---
 
 ## 技术栈
 
-- **地图**：高德地图 3D SDK
+- **地图**：高德地图 3D SDK（原生）+ 高德 JS API 2.0（WebView）
 - **定位**：高德定位 SDK（内置于3D地图）
 - **通信**：Socket.io
 - **架构**：原生 Android + Kotlin
+- **混合开发**：WebView + JavaScript Bridge（路线管理模块）
 
 ---
 
