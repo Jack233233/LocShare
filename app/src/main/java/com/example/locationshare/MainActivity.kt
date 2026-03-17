@@ -65,6 +65,15 @@ class MainActivity : AppCompatActivity() {
     private val userMarkers = mutableMapOf<String, Marker>()
     private var myLocation: LatLng? = null
 
+    // 用户位置信息（速度、方向）
+    data class UserLocationInfo(
+        var speed: Float = 0f,
+        var bearing: Float = 0f,
+        var lastUpdateTime: Long = 0
+    )
+    private val userLocationInfos = mutableMapOf<String, UserLocationInfo>()
+    private var selectedUserId: String? = null
+
     companion object {
         private const val LOCATION_PERMISSION_REQUEST = 1001
         private const val NOTIFICATION_PERMISSION_REQUEST = 1002
@@ -99,6 +108,59 @@ class MainActivity : AppCompatActivity() {
             uiSettings.isMyLocationButtonEnabled = true
             uiSettings.isZoomControlsEnabled = true
             moveCamera(CameraUpdateFactory.zoomTo(15f))
+
+            // 标记点击监听
+            setOnMarkerClickListener { marker ->
+                val userId = userMarkers.entries.find { it.value == marker }?.key
+                userId?.let {
+                    selectedUserId = it
+                    showUserInfoPanel(it, marker.title ?: "未知用户")
+                }
+                true
+            }
+
+            // 地图点击监听（关闭信息面板）
+            setOnMapClickListener {
+                hideUserInfoPanel()
+                selectedUserId = null
+            }
+        }
+    }
+
+    private fun showUserInfoPanel(userId: String, userName: String) {
+        val info = userLocationInfos[userId]
+        binding.tvSelectedUserName.text = userName
+
+        if (info != null) {
+            // 速度：m/s 转换为 km/h
+            val speedKmh = info.speed * 3.6f
+            binding.tvSpeed.text = String.format("%.1f km/h", speedKmh)
+
+            // 方向
+            binding.tvDirection.text = bearingToDirection(info.bearing)
+        } else {
+            binding.tvSpeed.text = "-- km/h"
+            binding.tvDirection.text = "--"
+        }
+
+        binding.cardUserInfo.visibility = View.VISIBLE
+    }
+
+    private fun hideUserInfoPanel() {
+        binding.cardUserInfo.visibility = View.GONE
+    }
+
+    private fun bearingToDirection(bearing: Float): String {
+        return when (bearing) {
+            in 0f..22.5f, in 337.5f..360f -> "北 ↑"
+            in 22.5f..67.5f -> "东北 ↗"
+            in 67.5f..112.5f -> "东 →"
+            in 112.5f..157.5f -> "东南 ↘"
+            in 157.5f..202.5f -> "南 ↓"
+            in 202.5f..247.5f -> "西南 ↙"
+            in 247.5f..292.5f -> "西 ←"
+            in 292.5f..337.5f -> "西北 ↖"
+            else -> "北 ↑"
         }
     }
 
@@ -480,10 +542,13 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             userMarkers.values.forEach { it.remove() }
             userMarkers.clear()
+            userLocationInfos.clear()
             isFirstLocation = true
             isFollowing = false
             binding.btnFollow.isChecked = false
             isSharingLocation = false
+            selectedUserId = null
+            hideUserInfoPanel()
             updateShareButtonState()
             Toast.makeText(this, "已退出共享", Toast.LENGTH_SHORT).show()
         }
@@ -501,18 +566,28 @@ class MainActivity : AppCompatActivity() {
             if (location.errorCode == 0) {
                 val lat = location.latitude
                 val lng = location.longitude
+                val speed = location.speed
+                val bearing = location.bearing
                 myLocation = LatLng(lat, lng)
+
+                // 保存自己的速度和方向
+                val info = userLocationInfos.getOrPut(userId) { UserLocationInfo() }
+                info.speed = speed
+                info.bearing = bearing
+                info.lastUpdateTime = System.currentTimeMillis()
 
                 val data = JSONObject().apply {
                     put("lat", lat)
                     put("lng", lng)
                     put("accuracy", location.accuracy)
                     put("userName", userName)
+                    put("speed", speed)
+                    put("bearing", bearing)
                 }
                 socket?.emit("location-update", data)
 
                 runOnUiThread {
-                    updateMyMarker(lat, lng)
+                    updateMyMarker(lat, lng, speed, bearing)
                 }
             }
         }
@@ -526,8 +601,8 @@ class MainActivity : AppCompatActivity() {
         locationClient?.stopLocation()
     }
 
-    private fun updateMyMarker(lat: Double, lng: Double) {
-        android.util.Log.d("LocationShare", "updateMyMarker: lat=$lat, lng=$lng, userId=$userId")
+    private fun updateMyMarker(lat: Double, lng: Double, speed: Float = 0f, bearing: Float = 0f) {
+        android.util.Log.d("LocationShare", "updateMyMarker: lat=$lat, lng=$lng, speed=$speed, bearing=$bearing, userId=$userId")
         val latLng = LatLng(lat, lng)
         myLocation = latLng
 
@@ -559,6 +634,14 @@ class MainActivity : AppCompatActivity() {
                 android.util.Log.d("LocationShare", "Marker created and saved, total markers: ${userMarkers.size}")
             } ?: android.util.Log.e("LocationShare", "Failed to create marker - aMap is null?")
         }
+
+        // 如果当前正在显示自己的信息，更新面板
+        if (selectedUserId == userId) {
+            runOnUiThread {
+                binding.tvSpeed.text = String.format("%.1f km/h", speed * 3.6f)
+                binding.tvDirection.text = bearingToDirection(bearing)
+            }
+        }
     }
 
     private fun updateUserLocationOnMap(data: JSONObject) {
@@ -569,8 +652,16 @@ class MainActivity : AppCompatActivity() {
         val lat = data.optDouble("lat")
         val lng = data.optDouble("lng")
         val name = data.optString("userName", "未知用户")
-        android.util.Log.d("LocationShare", "Other user location: $name at ($lat, $lng)")
+        val speed = data.optDouble("speed", 0.0).toFloat()
+        val bearing = data.optDouble("bearing", 0.0).toFloat()
+        android.util.Log.d("LocationShare", "Other user location: $name at ($lat, $lng), speed=$speed, bearing=$bearing")
         val latLng = LatLng(lat, lng)
+
+        // 保存其他用户的速度和方向
+        val info = userLocationInfos.getOrPut(id) { UserLocationInfo() }
+        info.speed = speed
+        info.bearing = bearing
+        info.lastUpdateTime = System.currentTimeMillis()
 
         val marker = userMarkers[id]
         val icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
@@ -591,6 +682,14 @@ class MainActivity : AppCompatActivity() {
                 userMarkers[id] = it
                 android.util.Log.d("LocationShare", "Red marker created, total markers: ${userMarkers.size}")
             } ?: android.util.Log.e("LocationShare", "Failed to create red marker - aMap is null?")
+        }
+
+        // 如果当前正在显示该用户的信息，更新面板
+        if (selectedUserId == id) {
+            runOnUiThread {
+                binding.tvSpeed.text = String.format("%.1f km/h", speed * 3.6f)
+                binding.tvDirection.text = bearingToDirection(bearing)
+            }
         }
     }
 
