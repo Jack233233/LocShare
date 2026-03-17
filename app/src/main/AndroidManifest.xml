@@ -49,6 +49,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".RouteManagerActivity"
+            android:label="路线管理"
+            android:parentActivityName=".MainActivity" />
     </application>
 
 </manifest>

@@ -51,8 +51,18 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
             android:text="多人共享"
             style="?attr/materialButtonOutlinedStyle" />
+
+        <Button
+            android:id="@+id/btnRouteManager"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="路线"
+            android:backgroundTint="@android:color/holo_orange_dark" />
     </LinearLayout>
 
     <!-- 双人模式区域 -->

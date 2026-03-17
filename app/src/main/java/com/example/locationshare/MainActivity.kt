@@ -180,6 +180,11 @@ class MainActivity : AppCompatActivity() {
             switchMode(ShareMode.MULTI)
         }
 
+        // 路线管理按钮
+        binding.btnRouteManager.setOnClickListener {
+            startActivity(android.content.Intent(this, RouteManagerActivity::class.java))
+        }
+
         // 生成配对码
         binding.btnGenerateCode.setOnClickListener {
             val name = binding.etUserName.text.toString().trim()

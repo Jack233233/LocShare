@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>地址选择</title>
+    <script>
+        // 配置安全密钥
+        window._AMapSecurityConfig = {
+            securityJsCode: '__SECURITY_KEY__'
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            padding: 16px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+        }
+        .title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+        .input-group {
+            margin-bottom: 12px;
+        }
+        .input-group label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 4px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background: #2a2a2a;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+        }
+        .input-group input:focus {
+            border-color: #4CAF50;
+        }
+        .autocomplete-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            margin-top: 4px;
+            display: none;
+        }
+        .autocomplete-item {
+            padding: 12px;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .autocomplete-item:hover,
+        .autocomplete-item.active {
+            background: #2a2a2a;
+        }
+        .autocomplete-item .name {
+            font-size: 14px;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+        .autocomplete-item .district {
+            font-size: 12px;
+            color: #888;
+        }
+        #map {
+            flex: 1;
+            min-height: 200px;
+        }
+        .footer {
+            padding: 16px;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            display: flex;
+            gap: 12px;
+        }
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .btn-primary {
+            background: #4CAF50;
+            color: #fff;
+        }
+        .btn-secondary {
+            background: #444;
+            color: #fff;
+        }
+        .btn:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+        .selected-info {
+            padding: 12px 16px;
+            background: #0d3320;
+            border-top: 1px solid #1a5c3a;
+            font-size: 13px;
+            color: #4CAF50;
+        }
+        .selected-info.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">选择起点和终点</div>
+        <div class="input-group">
+            <label>起点</label>
+            <input type="text" id="startInput" placeholder="输入地址搜索..." autocomplete="off">
+            <div class="autocomplete-list" id="startList"></div>
+        </div>
+        <div class="input-group">
+            <label>终点</label>
+            <input type="text" id="endInput" placeholder="输入地址搜索..." autocomplete="off">
+            <div class="autocomplete-list" id="endList"></div>
+        </div>
+    </div>
+
+    <div id="loading" style="padding: 20px; color: #fff; text-align: center;">地图加载中...</div>
+    <div id="map"></div>
+
+    <div class="selected-info hidden" id="selectedInfo">
+        已选择：<span id="startName">未选择</span> → <span id="endName">未选择</span>
+    </div>
+
+    <div class="footer">
+        <button class="btn btn-secondary" onclick="cancel()">取消</button>
+        <button class="btn btn-primary" id="confirmBtn" onclick="confirm()" disabled>确定</button>
+    </div>
+
+    <script src="https://webapi.amap.com/maps?v=2.0&key=__API_KEY__&plugin=AMap.AutoComplete"></script>
+    <script>
+        let map;
+        let startMarker, endMarker;
+        let startPoint = null;
+        let endPoint = null;
+        let autoComplete;
+
+        // 初始化地图
+        function initMap() {
+            try {
+                map = new AMap.Map('map', {
+                    zoom: 12,
+                    center: [116.397428, 39.90923]
+                });
+
+                // 加载 AutoComplete 插件 (v2.0)
+                AMap.plugin(['AMap.AutoComplete'], function() {
+                    autoComplete = new AMap.AutoComplete({
+                        city: '全国'
+                    });
+                });
+
+                document.getElementById('loading').style.display = 'none';
+            } catch (e) {
+                document.getElementById('loading').innerHTML = '地图加载失败: ' + e.message;
+                console.error('地图初始化失败:', e);
+            }
+        }
+
+        // 搜索输入提示
+        function searchTips(keyword, listId, isStart) {
+            const listEl = document.getElementById(listId);
+            if (!keyword || keyword.length < 2) {
+                listEl.style.display = 'none';
+                return;
+            }
+
+            autoComplete.search(keyword, function(status, result) {
+                if (status === 'complete' && result.tips) {
+                    renderTips(result.tips, listEl, isStart);
+                } else {
+                    listEl.style.display = 'none';
+                }
+            });
+        }
+
+        // 渲染提示列表
+        function renderTips(tips, listEl, isStart) {
+            listEl.innerHTML = '';
+            tips.forEach(function(tip, index) {
+                if (!tip.location || tip.location.length === 0) return;
+
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.innerHTML = `
+                    <div class="name">${tip.name}</div>
+                    <div class="district">${tip.district || ''} ${tip.address || ''}</div>
+                `;
+                item.onclick = function() {
+                    selectLocation(tip, isStart);
+                    listEl.style.display = 'none';
+                };
+                listEl.appendChild(item);
+            });
+            listEl.style.display = listEl.children.length > 0 ? 'block' : 'none';
+        }
+
+        // 选择位置
+        function selectLocation(tip, isStart) {
+            const lnglat = tip.location.split(',').map(Number);
+            const point = {
+                name: tip.name,
+                lat: lnglat[1],
+                lng: lnglat[0],
+                address: tip.district + tip.address
+            };
+
+            if (isStart) {
+                startPoint = point;
+                document.getElementById('startInput').value = tip.name;
+                updateMarker('start', lnglat, tip.name);
+            } else {
+                endPoint = point;
+                document.getElementById('endInput').value = tip.name;
+                updateMarker('end', lnglat, tip.name);
+            }
+
+            updateSelectedInfo();
+            updateMapBounds();
+        }
+
+        // 更新标记
+        function updateMarker(type, lnglat, title) {
+            if (type === 'start') {
+                if (startMarker) map.remove(startMarker);
+                startMarker = new AMap.Marker({
+                    position: lnglat,
+                    title: '起点: ' + title,
+                    icon: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png'
+                });
+                map.add(startMarker);
+            } else {
+                if (endMarker) map.remove(endMarker);
+                endMarker = new AMap.Marker({
+                    position: lnglat,
+                    title: '终点: ' + title,
+                    icon: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_r.png'
+                });
+                map.add(endMarker);
+            }
+        }
+
+        // 更新地图视野
+        function updateMapBounds() {
+            if (startMarker && endMarker) {
+                map.setFitView([startMarker, endMarker], 50);
+            } else if (startMarker) {
+                map.setCenter(startMarker.getPosition());
+                map.setZoom(15);
+            } else if (endMarker) {
+                map.setCenter(endMarker.getPosition());
+                map.setZoom(15);
+            }
+        }
+
+        // 更新选中信息
+        function updateSelectedInfo() {
+            const info = document.getElementById('selectedInfo');
+            const startName = document.getElementById('startName');
+            const endName = document.getElementById('endName');
+            const confirmBtn = document.getElementById('confirmBtn');
+
+            if (startPoint || endPoint) {
+                info.classList.remove('hidden');
+                startName.textContent = startPoint ? startPoint.name : '未选择';
+                endName.textContent = endPoint ? endPoint.name : '未选择';
+            }
+
+            if (startPoint && endPoint) {
+                confirmBtn.disabled = false;
+            }
+        }
+
+        // 确认选择
+        function confirm() {
+            if (startPoint && endPoint) {
+                const result = JSON.stringify({
+                    start: startPoint,
+                    end: endPoint
+                });
+                if (window.AndroidBridge) {
+                    window.AndroidBridge.onAddressSelected(result);
+                }
+            }
+        }
+
+        // 取消
+        function cancel() {
+            if (window.AndroidBridge) {
+                window.AndroidBridge.onCancel();
+            }
+        }
+
+        // 绑定输入事件
+        let startTimer, endTimer;
+        document.getElementById('startInput').addEventListener('input', function(e) {
+            clearTimeout(startTimer);
+            startTimer = setTimeout(() => {
+                searchTips(e.target.value, 'startList', true);
+            }, 300);
+        });
+
+        document.getElementById('endInput').addEventListener('input', function(e) {
+            clearTimeout(endTimer);
+            endTimer = setTimeout(() => {
+                searchTips(e.target.value, 'endList', false);
+            }, 300);
+        });
+
+        // 点击其他地方隐藏列表
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#startInput')) {
+                document.getElementById('startList').style.display = 'none';
+            }
+            if (!e.target.closest('#endInput')) {
+                document.getElementById('endList').style.display = 'none';
+            }
+        });
+
+        // 初始化
+        window.onload = initMap;
+    </script>
+</body>
+</html>
