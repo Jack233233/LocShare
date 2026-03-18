@@ -160,10 +160,16 @@ class MainActivity : AppCompatActivity() {
 
             // 标记点击监听
             setOnMarkerClickListener { marker ->
-                val userId = userMarkers.entries.find { it.value == marker }?.key
-                userId?.let {
+                val clickedUserId = userMarkers.entries.find { it.value == marker }?.key
+                clickedUserId?.let { id ->
                     val name = marker.title ?: "未知用户"
-                    webView.evaluateJavascript("window.onMarkerClicked('$it', '$name')", null)
+                    val info = userLocationInfos[id]
+                    val speed = info?.speed ?: 0f
+                    val bearing = info?.bearing ?: 0f
+                    webView.evaluateJavascript(
+                        "window.onMarkerClicked('$id', '${name.replace("'", "\\'")}', $speed, $bearing)",
+                        null
+                    )
                 }
                 true
             }
@@ -448,6 +454,14 @@ class MainActivity : AppCompatActivity() {
             )
             newMarker?.let { userMarkers[userId] = it }
         }
+
+        // 发送自己的位置到 WebView
+        runOnUiThread {
+            webView.evaluateJavascript(
+                "window.onLocationUpdate('$userId', $lat, $lng, '${displayName.replace("'", "\\'")}', $speed, $bearing)",
+                null
+            )
+        }
     }
 
     private fun updateUserLocationOnMap(data: JSONObject) {
@@ -483,7 +497,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.evaluateJavascript(
-            "window.onLocationUpdate('$id', $lat, $lng, '${name.replace("'", "\\'")}')",
+            "window.onLocationUpdate('$id', $lat, $lng, '${name.replace("'", "\\'")}', $speed, $bearing)",
             null
         )
     }

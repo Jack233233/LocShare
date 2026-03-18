@@ -6,17 +6,21 @@
     <title>Together</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html { background: transparent; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: white;
             min-height: 500px;
+            border-radius: 24px 24px 0 0;
+            box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.15);
         }
         .sheet-handle {
-            padding: 12px;
+            padding: 16px 12px 12px;
             text-align: center;
             cursor: pointer;
             background: white;
             touch-action: pan-y;
+            border-radius: 24px 24px 0 0;
         }
         .handle-bar {
             width: 36px;
@@ -139,9 +143,187 @@
             background: #FFF5F2;
             border-left: 3px solid #FF8A65;
         }
+        /* 地图信息窗口 */
+        .map-info-window {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease-out;
+        }
+        .map-info-window.show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .info-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .info-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4DB6AC, #80CBC4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        .info-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2C3E50;
+        }
+        .info-status {
+            font-size: 12px;
+            color: #999;
+            margin-top: 2px;
+        }
+        .info-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .stat-item {
+            background: #F8F9FA;
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #FF8A65;
+            margin-bottom: 4px;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #999;
+        }
+        .info-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 50%;
+            background: #F0F0F0;
+            color: #666;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .info-close:active {
+            background: #E0E0E0;
+        }
+        .info-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .info-backdrop.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        /* 房间用户列表 */
+        .room-users {
+            margin-top: 16px;
+            border-top: 1px solid #f0f0f0;
+            padding-top: 16px;
+        }
+        .room-users-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .room-user-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            background: #F8F9FA;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .room-user-item:active {
+            background: #FFF5F2;
+        }
+        .room-user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FF8A65, #F48FB1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            margin-right: 12px;
+        }
+        .room-user-name {
+            flex: 1;
+            font-size: 14px;
+            color: #2C3E50;
+        }
+        .room-user-self {
+            font-size: 11px;
+            color: #FF8A65;
+            background: #FFF5F2;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        }
     </style>
 </head>
 <body>
+    <!-- 地图信息窗口 -->
+    <div class="info-backdrop" id="info-backdrop" onclick="closeInfoWindow()"></div>
+    <div class="map-info-window" id="map-info-window">
+        <button class="info-close" onclick="closeInfoWindow()">✕</button>
+        <div class="info-header">
+            <div class="info-avatar" id="info-avatar">?</div>
+            <div>
+                <div class="info-name" id="info-name">未知用户</div>
+                <div class="info-status">点击查看详情</div>
+            </div>
+        </div>
+        <div class="info-stats">
+            <div class="stat-item">
+                <div class="stat-value" id="info-speed">0</div>
+                <div class="stat-label">km/h</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="info-bearing">北</div>
+                <div class="stat-label">方向</div>
+            </div>
+        </div>
+    </div>
+
     <div class="sheet-handle" onclick="toggleSheet()">
         <div class="handle-bar"></div>
         <div id="hint">👆 上滑展开</div>
@@ -184,7 +366,11 @@
                 <input type="text" id="room-id" placeholder="房间号" oninput="updateBtn()">
             </div>
             <div class="input-group">
-                <input type="text" id="user-name" placeholder="你的名字">
+                <input type="text" id="user-name" placeholder="你的名字" oninput="updateBtn()">
+            </div>
+            <div id="room-users-list" class="room-users hidden">
+                <div class="room-users-title">房间成员</div>
+                <div id="room-users-container"></div>
             </div>
         </div>
 
@@ -198,6 +384,7 @@
         let isSharing = false;
         let selectedFriend = null;
         let isExpanded = false;
+        let roomUsers = new Map(); // 存储房间内用户信息 {userId: {name, lat, lng, speed, bearing}}
 
         function toggleSheet() {
             if (window.AndroidBridge) {
@@ -310,7 +497,7 @@
 
             let canStart = false;
             if (currentMode === 'pair' && selectedFriend) canStart = true;
-            if (currentMode === 'multi' && document.getElementById('room-id')?.value) canStart = true;
+            if (currentMode === 'multi' && document.getElementById('room-id')?.value && document.getElementById('user-name')?.value) canStart = true;
 
             btn.disabled = !isSharing && !canStart;
         }
@@ -326,6 +513,107 @@
 
         window.onNewFriend = function(name) {
             loadFriends();
+        };
+
+        // 地图标记点击 - 显示信息窗口
+        window.onMarkerClicked = function(id, name, speed, bearing) {
+            document.getElementById('info-avatar').textContent = name.charAt(0);
+            document.getElementById('info-name').textContent = name;
+
+            // 速度 (m/s 转换为 km/h)
+            const speedKmh = Math.round(speed * 3.6);
+            document.getElementById('info-speed').textContent = speedKmh;
+
+            // 方向
+            const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+            const index = Math.round(bearing / 45) % 8;
+            document.getElementById('info-bearing').textContent = directions[index] || '北';
+
+            document.getElementById('info-backdrop').classList.add('show');
+            document.getElementById('map-info-window').classList.add('show');
+        };
+
+        function closeInfoWindow() {
+            document.getElementById('info-backdrop').classList.remove('show');
+            document.getElementById('map-info-window').classList.remove('show');
+        }
+
+        // 接收位置更新并更新房间用户列表
+        window.onLocationUpdate = function(userId, lat, lng, name, speed, bearing) {
+            // 保存用户位置信息
+            roomUsers.set(userId, {
+                userId: userId,
+                name: name,
+                lat: lat,
+                lng: lng,
+                speed: speed || 0,
+                bearing: bearing || 0
+            });
+
+            // 如果当前在多人模式，更新用户列表显示
+            if (currentMode === 'multi' && isSharing) {
+                updateRoomUsersList();
+            }
+        };
+
+        // 更新房间用户列表UI
+        function updateRoomUsersList() {
+            const container = document.getElementById('room-users-container');
+            const listWrapper = document.getElementById('room-users-list');
+
+            if (roomUsers.size === 0) {
+                listWrapper.classList.add('hidden');
+                return;
+            }
+
+            listWrapper.classList.remove('hidden');
+            const myUserId = ''; // 自己的ID会在原生端过滤掉或标记
+
+            let html = '';
+            roomUsers.forEach((user, uid) => {
+                const isSelf = uid === 'self' || uid === ''; // 简单判断，实际需要用户ID
+                html += `
+                    <div class="room-user-item" onclick="onRoomUserClick('${uid}')">
+                        <div class="room-user-avatar">${user.name.charAt(0)}</div>
+                        <div class="room-user-name">${user.name}</div>
+                        ${isSelf ? '<span class="room-user-self">我</span>' : ''}
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        // 点击房间用户
+        function onRoomUserClick(userId) {
+            const user = roomUsers.get(userId);
+            if (!user) return;
+
+            // 移动地图到该用户位置
+            if (window.AndroidBridge) {
+                AndroidBridge.moveToLocation(user.lat, user.lng);
+            }
+
+            // 显示信息窗口
+            document.getElementById('info-avatar').textContent = user.name.charAt(0);
+            document.getElementById('info-name').textContent = user.name;
+
+            const speedKmh = Math.round(user.speed * 3.6);
+            document.getElementById('info-speed').textContent = speedKmh;
+
+            const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+            const index = Math.round(user.bearing / 45) % 8;
+            document.getElementById('info-bearing').textContent = directions[index] || '北';
+
+            document.getElementById('info-backdrop').classList.add('show');
+            document.getElementById('map-info-window').classList.add('show');
+        }
+
+        // 用户离开房间
+        window.onUserLeave = function(userId) {
+            roomUsers.delete(userId);
+            if (currentMode === 'multi' && isSharing) {
+                updateRoomUsersList();
+            }
         };
     </script>
 </body>
