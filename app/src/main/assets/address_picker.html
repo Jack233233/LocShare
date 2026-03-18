@@ -210,7 +210,8 @@
         function renderTips(tips, listEl, isStart) {
             listEl.innerHTML = '';
             tips.forEach(function(tip, index) {
-                if (!tip.location || tip.location.length === 0) return;
+                if (!tip.location) return;
+                // location 可能是字符串 "lng,lat" 或对象 {lng, lat}
 
                 const item = document.createElement('div');
                 item.className = 'autocomplete-item';
@@ -219,6 +220,7 @@
                     <div class="district">${tip.district || ''} ${tip.address || ''}</div>
                 `;
                 item.onclick = function() {
+                    console.log('Item clicked:', tip.name);
                     selectLocation(tip, isStart);
                     listEl.style.display = 'none';
                 };
@@ -229,7 +231,20 @@
 
         // 选择位置
         function selectLocation(tip, isStart) {
-            const lnglat = tip.location.split(',').map(Number);
+            console.log('selectLocation called:', tip.name, 'isStart:', isStart);
+            console.log('tip.location:', tip.location, 'type:', typeof tip.location);
+
+            // 处理 location 可能是对象或字符串的情况
+            let lnglat;
+            if (typeof tip.location === 'string') {
+                lnglat = tip.location.split(',').map(Number);
+            } else if (tip.location && typeof tip.location === 'object') {
+                // location 可能是 {lng, lat} 对象
+                lnglat = [tip.location.lng, tip.location.lat];
+            } else {
+                console.error('Unknown location format:', tip.location);
+                return;
+            }
             const point = {
                 name: tip.name,
                 lat: lnglat[1],
@@ -249,6 +264,23 @@
 
             updateSelectedInfo();
             updateMapBounds();
+
+            // 通知 Android 端单个点已选择（用于实时更新）
+            console.log('Checking AndroidBridge:', window.AndroidBridge);
+            if (window.AndroidBridge && window.AndroidBridge.onPointSelected) {
+                console.log('Calling onPointSelected...');
+                try {
+                    window.AndroidBridge.onPointSelected(JSON.stringify({
+                        isStart: isStart,
+                        point: point
+                    }));
+                    console.log('onPointSelected called successfully');
+                } catch (e) {
+                    console.error('Error calling onPointSelected:', e);
+                }
+            } else {
+                console.error('AndroidBridge or onPointSelected not available');
+            }
         }
 
         // 更新标记

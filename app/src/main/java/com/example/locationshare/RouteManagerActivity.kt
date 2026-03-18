@@ -251,6 +251,34 @@ class RouteManagerActivity : AppCompatActivity() {
         }
 
         @android.webkit.JavascriptInterface
+        fun onPointSelected(resultJson: String) {
+            // 单个点选择时的实时回调
+            android.util.Log.d("WebViewBridge", "onPointSelected called: $resultJson")
+            try {
+                val json = JSONObject(resultJson)
+                val isStart = json.getBoolean("isStart")
+                val pointJson = json.getJSONObject("point")
+
+                val point = AddressResult(
+                    name = pointJson.getString("name"),
+                    lat = pointJson.getDouble("lat"),
+                    lng = pointJson.getDouble("lng")
+                )
+
+                if (isStart) {
+                    pendingStart = point
+                    android.util.Log.d("WebViewBridge", "pendingStart set: ${point.name}")
+                } else {
+                    pendingEnd = point
+                    android.util.Log.d("WebViewBridge", "pendingEnd set: ${point.name}")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("WebViewBridge", "Error in onPointSelected: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+
+        @android.webkit.JavascriptInterface
         fun onCancel() {
             // 不需要处理
         }
