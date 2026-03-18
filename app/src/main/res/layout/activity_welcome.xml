@@ -8,12 +8,16 @@
     android:padding="32dp">
 
     <!-- Logo/图标 -->
-    <ImageView
+    <TextView
         android:layout_width="120dp"
         android:layout_height="120dp"
         android:layout_marginBottom="32dp"
-        android:background="@drawable/ic_launcher_foreground"
-        android:contentDescription="App Logo" />
+        android:background="@drawable/bg_circle_green"
+        android:gravity="center"
+        android:text="位"
+        android:textColor="#FFFFFF"
+        android:textSize="48sp"
+        android:textStyle="bold" />
 
     <!-- 欢迎标题 -->
     <TextView

@@ -3,6 +3,7 @@ package com.example.locationshare
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -391,13 +392,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startSharing() {
-        val name = binding.etUserName.text.toString().trim()
+        // 从 PrefsManager 获取用户名
+        val name = prefsManager.getUserName()
         if (name.isEmpty()) {
-            Toast.makeText(this, "请先输入你的名字", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "请先设置昵称", Toast.LENGTH_SHORT).show()
             return
         }
         userName = name
-        prefsManager.setUserName(name)
 
         // 检查通知权限
         if (!checkNotificationPermission()) {
