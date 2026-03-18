@@ -3,6 +3,7 @@ package com.example.locationshare
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -164,12 +165,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * 加载并显示用户信息
+     */
+    private fun loadUserInfo() {
+        val user = prefsManager.getUser()
+        if (user != null) {
+            userName = user.userName
+            binding.tvUserName.text = user.userName
+            binding.tvUserIdShort.text = "ID: ${user.userId.takeLast(8)}"
+        } else {
+            // 未注册，不应该发生（WelcomeActivity 会拦截）
+            userName = ""
+            binding.tvUserName.text = "未登录"
+            binding.tvUserIdShort.text = "ID: ..."
+        }
+    }
+
     private fun initViews() {
-        // 恢复用户名
-        val savedName = prefsManager.getUserName()
-        if (savedName.isNotEmpty()) {
-            binding.etUserName.setText(savedName)
-            userName = savedName
+        // 加载用户信息
+        loadUserInfo()
+
+        // 用户信息区域点击 - 跳转到个人中心
+        binding.layoutUserInfo.setOnClickListener {
+            startActivity(Intent(this, ProfileActivity::class.java))
         }
 
         // 模式切换按钮
@@ -187,13 +206,6 @@ class MainActivity : AppCompatActivity() {
 
         // 生成配对码
         binding.btnGenerateCode.setOnClickListener {
-            val name = binding.etUserName.text.toString().trim()
-            if (name.isEmpty()) {
-                Toast.makeText(this, "请先输入你的名字", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            userName = name
-            prefsManager.setUserName(name)
             generatePairCode()
         }
 
@@ -204,13 +216,6 @@ class MainActivity : AppCompatActivity() {
 
         // 输入配对码
         binding.btnInputCode.setOnClickListener {
-            val name = binding.etUserName.text.toString().trim()
-            if (name.isEmpty()) {
-                Toast.makeText(this, "请先输入你的名字", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            userName = name
-            prefsManager.setUserName(name)
             showInputCodeDialog()
         }
 
@@ -387,13 +392,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startSharing() {
-        val name = binding.etUserName.text.toString().trim()
+        // 从 PrefsManager 获取用户名
+        val name = prefsManager.getUserName()
         if (name.isEmpty()) {
-            Toast.makeText(this, "请先输入你的名字", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "请先设置昵称", Toast.LENGTH_SHORT).show()
             return
         }
         userName = name
-        prefsManager.setUserName(name)
 
         // 检查通知权限
         if (!checkNotificationPermission()) {
