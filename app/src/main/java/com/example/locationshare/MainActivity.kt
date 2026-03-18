@@ -436,6 +436,8 @@ class MainActivity : AppCompatActivity() {
 
     // 隐藏好友位置模式
     private fun hideFriendLocationMode() {
+        android.util.Log.d("RouteListener", "Hiding friend location mode, was showing: ${friendLocationData?.friendName}")
+
         isFriendLocationMode = false
         friendLocationData = null
 
@@ -450,6 +452,8 @@ class MainActivity : AppCompatActivity() {
         binding.routeShareFab.visibility = View.GONE
         binding.routeShareFab.text = "📍 行程共享中"
         binding.routeShareFab.setBackgroundResource(R.drawable.bg_route_share_fab)
+
+        android.util.Log.d("RouteListener", "Friend location mode hidden")
     }
 
     // 更新好友位置（接收方）
@@ -573,6 +577,8 @@ class MainActivity : AppCompatActivity() {
 
     // 隐藏好友路线模式
     private fun hideFriendRouteMode(leaveRoom: Boolean = true) {
+        android.util.Log.d("RouteListener", "Hiding friend route mode, leaveRoom: $leaveRoom, was showing: ${friendRouteData?.routeName}")
+
         isFriendRouteMode = false
         friendRouteData = null
 
@@ -600,6 +606,8 @@ class MainActivity : AppCompatActivity() {
         binding.routeShareFab.visibility = View.GONE
         binding.routeShareFab.text = "📍 行程共享中"
         binding.routeShareFab.setBackgroundResource(R.drawable.bg_route_share_fab)
+
+        android.util.Log.d("RouteListener", "Friend route mode hidden")
     }
 
     private fun initMap() {
@@ -777,11 +785,38 @@ class MainActivity : AppCompatActivity() {
                         val data = args[0] as JSONObject
                         val fromUserId = data.optString("userId")
 
+                        android.util.Log.d("RouteListener", "Friend location stopped: $fromUserId, current: ${friendLocationData?.friendId}")
+
                         // 只处理当前正在显示的好友
                         if (isFriendLocationMode && fromUserId == friendLocationData?.friendId) {
                             runOnUiThread {
                                 Toast.makeText(this@MainActivity, "${friendLocationData?.friendName} 已停止共享位置", Toast.LENGTH_LONG).show()
                                 hideFriendLocationMode()
+                                hideRouteShareDialog()
+                            }
+                        }
+                    }
+
+                    // 用户离开房间（用于清理状态）
+                    on("user-left") { args ->
+                        val data = args[0] as JSONObject
+                        val leftUserId = data.optString("userId")
+
+                        android.util.Log.d("RouteListener", "User left: $leftUserId")
+
+                        // 如果是正在共享的好友离开了，清理状态
+                        if (isFriendLocationMode && leftUserId == friendLocationData?.friendId) {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "${friendLocationData?.friendName} 已离线", Toast.LENGTH_LONG).show()
+                                hideFriendLocationMode()
+                                hideRouteShareDialog()
+                            }
+                        }
+                        if (isFriendRouteMode && leftUserId == friendRouteData?.friendId) {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "${friendRouteData?.friendName} 已离线", Toast.LENGTH_LONG).show()
+                                hideFriendRouteMode(leaveRoom = false)
+                                hideRouteShareDialog()
                             }
                         }
                     }
@@ -827,9 +862,15 @@ class MainActivity : AppCompatActivity() {
 
                             android.util.Log.d("RouteListener", "Received friend route: ${friendRouteData?.routeName}")
 
-                            // 加入配对房间接收位置更新
+                            // 服务器已自动加入房间，客户端无需再 join
+                            // 但为了兼容旧版本服务器，如果 3 秒内没收到位置，尝试手动加入
                             if (pairRoomId.isNotEmpty()) {
-                                joinPairRoomForRoute(pairRoomId)
+                                binding.root.postDelayed({
+                                    if (friendTrackPoints.isEmpty() && isFriendRouteMode) {
+                                        android.util.Log.d("RouteListener", "No location received yet, trying to join room manually")
+                                        joinPairRoomForRoute(pairRoomId)
+                                    }
+                                }, 3000)
                             }
                         }
                     }
@@ -858,12 +899,38 @@ class MainActivity : AppCompatActivity() {
                         val data = args[0] as JSONObject
                         val fromUserId = data.optString("userId")
 
+                        android.util.Log.d("RouteListener", "Friend route stopped: $fromUserId, current mode: $isFriendRouteMode, current friend: ${friendRouteData?.friendId}")
+
                         // 只处理当前正在显示的好友
                         if (isFriendRouteMode && fromUserId == friendRouteData?.friendId) {
                             runOnUiThread {
                                 Toast.makeText(this@MainActivity, "${friendRouteData?.friendName} 已停止共享", Toast.LENGTH_LONG).show()
-                                hideFriendRouteMode(leaveRoom = false)  // 不离开房间，保持连接以便下次接收
-                                binding.routeShareDialog.visibility = View.GONE
+                                hideFriendRouteMode(leaveRoom = false)
+                                hideRouteShareDialog()
+                            }
+                        }
+                    }
+
+                    // 用户离开房间（用于清理状态）
+                    on("user-left") { args ->
+                        val data = args[0] as JSONObject
+                        val leftUserId = data.optString("userId")
+
+                        android.util.Log.d("RouteListener", "User left: $leftUserId, location friend: ${friendLocationData?.friendId}, route friend: ${friendRouteData?.friendId}")
+
+                        // 如果是正在共享的好友离开了，清理状态
+                        if (isFriendLocationMode && leftUserId == friendLocationData?.friendId) {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "${friendLocationData?.friendName} 已离线", Toast.LENGTH_LONG).show()
+                                hideFriendLocationMode()
+                                hideRouteShareDialog()
+                            }
+                        }
+                        if (isFriendRouteMode && leftUserId == friendRouteData?.friendId) {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "${friendRouteData?.friendName} 已离线", Toast.LENGTH_LONG).show()
+                                hideFriendRouteMode(leaveRoom = false)
+                                hideRouteShareDialog()
                             }
                         }
                     }
