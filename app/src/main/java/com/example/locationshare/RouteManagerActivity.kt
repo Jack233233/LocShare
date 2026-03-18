@@ -1,34 +1,44 @@
 package com.example.locationshare
 
 import android.annotation.SuppressLint
+import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
-import android.widget.*
-import androidx.appcompat.app.AlertDialog
+import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.lifecycle.lifecycleScope
 import com.example.locationshare.databinding.ActivityRouteManagerBinding
-import com.example.locationshare.databinding.DialogAddRouteBinding
 import com.example.locationshare.model.Route
 import com.example.locationshare.utils.PrefsManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 class RouteManagerActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityRouteManagerBinding
     private lateinit var prefsManager: PrefsManager
-    private lateinit var routeAdapter: RouteAdapter
+    private lateinit var webView: WebView
 
-    private var routes: MutableList<Route> = mutableListOf()
+    private val AMAP_KEY = "99d33a7ce806060acfffa9a80ae613bc"
 
-    // 你的高德 Web JS API Key
-    private val AMAP_WEB_KEY = "99d33a7ce806060acfffa9a80ae613bc"
-    private val AMAP_SECURITY_KEY = "2e4a9748ed8767c2402ee4f26009ccfc"
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .build()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,313 +46,224 @@ class RouteManagerActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         prefsManager = PrefsManager(this)
-
-        initViews()
-        loadRoutes()
+        initWebView()
     }
-
-    private fun initViews() {
-        routeAdapter = RouteAdapter(
-            onStartClick = { route ->
-                startRouteTrip(route)
-            },
-            onDeleteClick = { route ->
-                showDeleteConfirm(route)
-            },
-            onFavoriteClick = { route ->
-                toggleFavorite(route)
-            }
-        )
-
-        binding.recyclerRoutes.layoutManager = LinearLayoutManager(this)
-        binding.recyclerRoutes.adapter = routeAdapter
-
-        binding.btnAddRoute.setOnClickListener {
-            showAddRouteDialog()
-        }
-    }
-
-    private fun loadRoutes() {
-        routes = prefsManager.getRoutes().toMutableList()
-        routeAdapter.submitList(routes)
-    }
-
-    // 用于存储 WebView 选择的地址
-    private var pendingStart: AddressResult? = null
-    private var pendingEnd: AddressResult? = null
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun showAddRouteDialog() {
-        val dialogBinding = DialogAddRouteBinding.inflate(layoutInflater)
-        val dialog = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog)
-            .setView(dialogBinding.root)
-            .create()
+    private fun initWebView() {
+        webView = binding.webView
 
-        pendingStart = null
-        pendingEnd = null
-
-        // 设置 WebView
-        val webView = dialogBinding.webViewAddressPicker
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.allowFileAccess = true
-        webView.settings.allowContentAccess = true
-
-        // 启用 WebView 调试
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
-            WebView.setWebContentsDebuggingEnabled(true)
-        }
-
-        // 添加 WebChromeClient 用于调试
-        webView.webChromeClient = object : android.webkit.WebChromeClient() {
-            override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
-                android.util.Log.d("WebViewJS", "${message.message()} -- From line ${message.lineNumber()} of ${message.sourceId()}")
-                return true
-            }
-        }
-
-        // 添加 WebViewClient 监听加载状态
-        webView.webViewClient = object : android.webkit.WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                android.util.Log.d("WebView", "页面加载完成: $url")
+        webView.apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                setLayerType(View.LAYER_TYPE_HARDWARE, null)
             }
 
-            override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
-                super.onReceivedError(view, request, error)
-                android.util.Log.e("WebView", "加载错误: $error")
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                allowFileAccess = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                cacheMode = WebSettings.LOAD_DEFAULT
             }
+
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    return false
+                }
+            }
+
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(message: android.webkit.ConsoleMessage?): Boolean {
+                    android.util.Log.d("WebViewConsole", "${message?.message()} -- ${message?.sourceId()}:${message?.lineNumber()}")
+                    return true
+                }
+            }
+
+            addJavascriptInterface(RouteWebBridge(), "AndroidBridge")
+
+            loadUrl("file:///android_asset/web/routes.html")
+        }
+    }
+
+    // WebView JS 桥接类
+    inner class RouteWebBridge {
+
+        @JavascriptInterface
+        fun goBack() {
+            runOnUiThread { finish() }
         }
 
-        // JavaScript 接口
-        webView.addJavascriptInterface(AddressPickerBridge { start, end ->
-            pendingStart = start
-            pendingEnd = end
+        @JavascriptInterface
+        fun loadRoutes() {
+            val routes = prefsManager.getRoutes()
+            val jsonArray = JSONArray()
+            routes.forEach { route ->
+                jsonArray.put(JSONObject().apply {
+                    put("id", route.id)
+                    put("name", route.name)
+                    put("startName", route.startName)
+                    put("startLat", route.startLat)
+                    put("startLng", route.startLng)
+                    put("endName", route.endName)
+                    put("endLat", route.endLat)
+                    put("endLng", route.endLng)
+                    put("sharedWith", route.sharedWith)
+                    put("sharedWithName", route.sharedWithName)
+                    put("isFavorite", route.isFavorite)
+                })
+            }
             runOnUiThread {
-                Toast.makeText(this, "已选择: ${start.name} → ${end.name}", Toast.LENGTH_SHORT).show()
+                webView.evaluateJavascript(
+                    "window.onRoutesLoaded('${jsonArray.toString().replace("'", "\\'")}')",
+                    null
+                )
             }
-        }, "AndroidBridge")
-
-        // 加载 HTML 并注入 API Key 和安全密钥
-        try {
-            var html = assets.open("address_picker.html").bufferedReader().use { it.readText() }
-            html = html.replace("__API_KEY__", AMAP_WEB_KEY)
-            html = html.replace("__SECURITY_KEY__", AMAP_SECURITY_KEY)
-            webView.loadDataWithBaseURL("https://webapi.amap.com", html, "text/html", "UTF-8", null)
-        } catch (e: Exception) {
-            Toast.makeText(this, "加载地图失败", Toast.LENGTH_SHORT).show()
-            return
         }
 
-        // 加载好友列表
-        val friends = prefsManager.getFriends()
-        val spinnerItems = listOf("选择共享对象") + friends.map { it.friendName }
-        val spinnerAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, spinnerItems)
-        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        dialogBinding.spinnerSharedWith.adapter = spinnerAdapter
-
-        var selectedFriendId = ""
-        dialogBinding.spinnerSharedWith.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                selectedFriendId = if (position > 0) friends[position - 1].friendId else ""
+        @JavascriptInterface
+        fun loadFriendsForRoute() {
+            val friends = prefsManager.getFriends()
+            val jsonArray = JSONArray()
+            friends.forEach { friend ->
+                jsonArray.put(JSONObject().apply {
+                    put("friendId", friend.friendId)
+                    put("friendName", friend.friendName)
+                })
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+            runOnUiThread {
+                webView.evaluateJavascript(
+                    "window.onFriendsLoaded('${jsonArray.toString().replace("'", "\\'")}')",
+                    null
+                )
+            }
         }
 
-        // 创建保存按钮的 Dialog
-        dialog.setButton(AlertDialog.BUTTON_POSITIVE, "保存路线") { _, _ ->
-            val routeName = dialogBinding.etRouteName.text.toString().trim()
-            if (routeName.isEmpty()) {
-                Toast.makeText(this, "请输入路线名称", Toast.LENGTH_SHORT).show()
-                return@setButton
-            }
-            if (pendingStart == null || pendingEnd == null) {
-                Toast.makeText(this, "请在地图中选择起点和终点", Toast.LENGTH_SHORT).show()
-                return@setButton
-            }
-            if (selectedFriendId.isEmpty()) {
-                Toast.makeText(this, "请选择共享对象", Toast.LENGTH_SHORT).show()
-                return@setButton
-            }
-
-            val newRoute = Route(
-                id = UUID.randomUUID().toString(),
-                name = routeName,
-                startName = pendingStart!!.name,
-                startLat = pendingStart!!.lat,
-                startLng = pendingStart!!.lng,
-                endName = pendingEnd!!.name,
-                endLat = pendingEnd!!.lat,
-                endLng = pendingEnd!!.lng,
-                sharedWith = selectedFriendId,
-                sharedWithName = friends.find { it.friendId == selectedFriendId }?.friendName ?: "",
-                isFavorite = true
-            )
-
-            prefsManager.addRoute(newRoute)
-            loadRoutes()
-            Toast.makeText(this, "路线保存成功", Toast.LENGTH_SHORT).show()
-        }
-
-        dialog.setButton(AlertDialog.BUTTON_NEGATIVE, "取消") { _, _ -> }
-
-        dialog.show()
-
-        // 设置 Dialog 大小
-        dialog.window?.setLayout(
-            (resources.displayMetrics.widthPixels * 0.9).toInt(),
-            (resources.displayMetrics.heightPixels * 0.8).toInt()
-        )
-    }
-
-
-    private fun startRouteTrip(route: Route) {
-        Toast.makeText(this, "开始路线：${route.name}", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun showDeleteConfirm(route: Route) {
-        AlertDialog.Builder(this)
-            .setTitle("删除路线")
-            .setMessage("确定要删除路线 \"${route.name}\" 吗？")
-            .setPositiveButton("删除") { _, _ ->
-                prefsManager.deleteRoute(route.id)
-                loadRoutes()
-                Toast.makeText(this, "已删除", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    private fun toggleFavorite(route: Route) {
-        val updatedRoute = route.copy(isFavorite = !route.isFavorite)
-        prefsManager.updateRoute(updatedRoute)
-        loadRoutes()
-    }
-
-    data class AddressResult(
-        val name: String,
-        val lat: Double,
-        val lng: Double
-    )
-
-    // WebView JS 接口类
-    inner class AddressPickerBridge(private val onSelected: (AddressResult, AddressResult) -> Unit) {
-        @android.webkit.JavascriptInterface
-        fun onAddressSelected(resultJson: String) {
+        @JavascriptInterface
+        fun saveRoute(routeJson: String) {
             try {
-                val json = JSONObject(resultJson)
-                val startJson = json.getJSONObject("start")
-                val endJson = json.getJSONObject("end")
-
-                val start = AddressResult(
-                    name = startJson.getString("name"),
-                    lat = startJson.getDouble("lat"),
-                    lng = startJson.getDouble("lng")
+                val json = JSONObject(routeJson)
+                val route = Route(
+                    id = UUID.randomUUID().toString(),
+                    name = json.getString("name"),
+                    startName = json.getString("startName"),
+                    startLat = json.getDouble("startLat"),
+                    startLng = json.getDouble("startLng"),
+                    endName = json.getString("endName"),
+                    endLat = json.getDouble("endLat"),
+                    endLng = json.getDouble("endLng"),
+                    sharedWith = json.optString("sharedWith", ""),
+                    sharedWithName = prefsManager.getFriends()
+                        .find { it.friendId == json.optString("sharedWith", "") }?.friendName ?: "",
+                    isFavorite = true
                 )
-                val end = AddressResult(
-                    name = endJson.getString("name"),
-                    lat = endJson.getDouble("lat"),
-                    lng = endJson.getDouble("lng")
-                )
-                onSelected(start, end)
+                prefsManager.addRoute(route)
+                runOnUiThread {
+                    Toast.makeText(this@RouteManagerActivity, "路线保存成功", Toast.LENGTH_SHORT).show()
+                    webView.evaluateJavascript("window.onRouteSaved()", null)
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
-            }
-        }
-
-        @android.webkit.JavascriptInterface
-        fun onPointSelected(resultJson: String) {
-            // 单个点选择时的实时回调
-            android.util.Log.d("WebViewBridge", "onPointSelected called: $resultJson")
-            try {
-                val json = JSONObject(resultJson)
-                val isStart = json.getBoolean("isStart")
-                val pointJson = json.getJSONObject("point")
-
-                val point = AddressResult(
-                    name = pointJson.getString("name"),
-                    lat = pointJson.getDouble("lat"),
-                    lng = pointJson.getDouble("lng")
-                )
-
-                if (isStart) {
-                    pendingStart = point
-                    android.util.Log.d("WebViewBridge", "pendingStart set: ${point.name}")
-                } else {
-                    pendingEnd = point
-                    android.util.Log.d("WebViewBridge", "pendingEnd set: ${point.name}")
+                runOnUiThread {
+                    Toast.makeText(this@RouteManagerActivity, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("WebViewBridge", "Error in onPointSelected: ${e.message}")
-                e.printStackTrace()
             }
         }
 
-        @android.webkit.JavascriptInterface
-        fun onCancel() {
-            // 不需要处理
+        @JavascriptInterface
+        fun startRoute(routeId: String) {
+            val route = prefsManager.getRoutes().find { it.id == routeId }
+            route?.let {
+                runOnUiThread {
+                    Toast.makeText(this@RouteManagerActivity, "开始路线: ${it.name}", Toast.LENGTH_SHORT).show()
+                    // TODO: 跳转到导航页面或开始路线追踪
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteRoute(routeId: String) {
+            prefsManager.deleteRoute(routeId)
+            runOnUiThread {
+                Toast.makeText(this@RouteManagerActivity, "已删除", Toast.LENGTH_SHORT).show()
+                webView.evaluateJavascript("window.onRouteDeleted()", null)
+            }
+        }
+
+        @JavascriptInterface
+        fun searchAddress(type: String, keyword: String) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    android.util.Log.d("RouteSearch", "Searching for: $keyword, type: $type")
+
+                    // URL 编码关键词
+                    val encodedKeyword = java.net.URLEncoder.encode(keyword, "UTF-8")
+                    val url = "https://restapi.amap.com/v3/assistant/inputtips?key=$AMAP_KEY&keywords=$encodedKeyword&city=北京"
+
+                    android.util.Log.d("RouteSearch", "URL: $url")
+
+                    val request = Request.Builder().url(url).build()
+                    val response = httpClient.newCall(request).execute()
+                    val body = response.body?.string()
+
+                    android.util.Log.d("RouteSearch", "Response: $body")
+
+                    val results = JSONArray()
+                    if (body != null) {
+                        val json = JSONObject(body)
+                        if (json.optString("status") == "1") {
+                            val tips = json.optJSONArray("tips") ?: JSONArray()
+                            val count = Math.min(tips.length(), 10)
+                            for (i in 0 until count) {
+                                val tip = tips.getJSONObject(i)
+                                val location = tip.optString("location", "")
+                                android.util.Log.d("RouteSearch", "Tip $i: ${tip.optString("name")}, location: $location")
+                                if (location.contains(",")) {
+                                    val parts = location.split(",")
+                                    results.put(JSONObject().apply {
+                                        put("name", tip.optString("name"))
+                                        put("address", tip.optString("address", ""))
+                                        put("lng", parts[0].toDoubleOrNull() ?: 0.0)
+                                        put("lat", parts[1].toDoubleOrNull() ?: 0.0)
+                                    })
+                                }
+                            }
+                        }
+                    }
+
+                    android.util.Log.d("RouteSearch", "Results count: ${results.length()}")
+
+                    withContext(Dispatchers.Main) {
+                        webView.evaluateJavascript(
+                            "window.onSearchResults('$type', '${results.toString().replace("'", "\\'")}')",
+                            null
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("RouteSearch", "Error: ${e.message}", e)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun toggleFavorite(routeId: String) {
+            val routes = prefsManager.getRoutes()
+            val route = routes.find { it.id == routeId }
+            route?.let {
+                val updated = it.copy(isFavorite = !it.isFavorite)
+                prefsManager.updateRoute(updated)
+                runOnUiThread {
+                    webView.evaluateJavascript("window.onFavoriteToggled()", null)
+                }
+            }
         }
     }
 
-    inner class RouteAdapter(
-        private val onStartClick: (Route) -> Unit,
-        private val onDeleteClick: (Route) -> Unit,
-        private val onFavoriteClick: (Route) -> Unit
-    ) : RecyclerView.Adapter<RouteAdapter.RouteViewHolder>() {
-
-        private var routes: List<Route> = emptyList()
-
-        fun submitList(newRoutes: List<Route>) {
-            routes = newRoutes
-            notifyDataSetChanged()
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RouteViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_route, parent, false)
-            return RouteViewHolder(view)
-        }
-
-        override fun onBindViewHolder(holder: RouteViewHolder, position: Int) {
-            holder.bind(routes[position])
-        }
-
-        override fun getItemCount(): Int = routes.size
-
-        inner class RouteViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-            private val tvRouteName: TextView = itemView.findViewById(R.id.tvRouteName)
-            private val ivFavorite: ImageView = itemView.findViewById(R.id.ivFavorite)
-            private val tvStartLocation: TextView = itemView.findViewById(R.id.tvStartLocation)
-            private val tvEndLocation: TextView = itemView.findViewById(R.id.tvEndLocation)
-            private val tvSharedWith: TextView = itemView.findViewById(R.id.tvSharedWith)
-            private val btnStartTrip: Button = itemView.findViewById(R.id.btnStartTrip)
-            private val btnDeleteRoute: ImageButton = itemView.findViewById(R.id.btnDeleteRoute)
-
-            fun bind(route: Route) {
-                tvRouteName.text = route.name
-                tvStartLocation.text = route.startName
-                tvEndLocation.text = route.endName
-                tvSharedWith.text = "共享给：${route.sharedWithName}"
-
-                ivFavorite.setImageResource(
-                    if (route.isFavorite) android.R.drawable.btn_star_big_on
-                    else android.R.drawable.btn_star_big_off
-                )
-
-                ivFavorite.setOnClickListener {
-                    onFavoriteClick(route)
-                }
-
-                btnStartTrip.setOnClickListener {
-                    onStartClick(route)
-                }
-
-                btnDeleteRoute.setOnClickListener {
-                    onDeleteClick(route)
-                }
-            }
+    override fun onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
         }
     }
-
-
 }
