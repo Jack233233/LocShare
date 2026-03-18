@@ -153,6 +153,61 @@ class ApiService(private val context: Context) {
         }
     }
 
+    // ============ 用户系统 ============
+
+    // 注册/更新用户信息
+    suspend fun registerUser(userName: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val userId = prefsManager.getUserId()
+
+            val json = JSONObject().apply {
+                put("userId", userId)
+                put("userName", userName)
+            }
+
+            val request = Request.Builder()
+                .url("$API_BASE/user/register")
+                .post(json.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            val response = client.newCall(request).execute()
+
+            if (response.isSuccessful) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception("注册失败: ${response.message}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 从服务器获取用户信息
+    suspend fun fetchUserProfile(userId: String): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$API_BASE/user/$userId")
+                .get()
+                .build()
+
+            val response = client.newCall(request).execute()
+            val body = response.body?.string()
+
+            if (response.isSuccessful && body != null) {
+                val result = JSONObject(body)
+                val user = result.getJSONObject("user")
+                Result.success(Pair(
+                    user.getString("userId"),
+                    user.getString("userName")
+                ))
+            } else {
+                Result.failure(Exception("获取用户信息失败"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // 删除好友
     suspend fun deleteFriend(friendId: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {

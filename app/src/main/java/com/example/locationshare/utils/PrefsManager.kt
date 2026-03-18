@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.example.locationshare.model.Friend
 import com.example.locationshare.model.Route
+import com.example.locationshare.model.User
 import org.json.JSONArray
+import org.json.JSONObject
 
 class PrefsManager(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -13,11 +15,17 @@ class PrefsManager(context: Context) {
         private const val PREFS_NAME = "location_share_prefs"
         private const val KEY_USER_ID = "user_id"
         private const val KEY_USER_NAME = "user_name"
+        private const val KEY_USER_DATA = "user_data"      // 完整的用户数据 JSON
+        private const val KEY_IS_REGISTERED = "is_registered"
         private const val KEY_FRIENDS = "friends"
         private const val KEY_ROUTES = "routes"
     }
 
-    // 用户ID
+    // ==================== 用户管理（新版）====================
+
+    /**
+     * 获取或创建用户ID（UUID）
+     */
     fun getUserId(): String {
         var userId = prefs.getString(KEY_USER_ID, null)
         if (userId == null) {
@@ -27,12 +35,67 @@ class PrefsManager(context: Context) {
         return userId
     }
 
-    fun setUserName(name: String) {
-        prefs.edit().putString(KEY_USER_NAME, name).apply()
+    /**
+     * 检查用户是否已注册
+     */
+    fun isUserRegistered(): Boolean {
+        return prefs.getBoolean(KEY_IS_REGISTERED, false)
     }
 
+    /**
+     * 保存用户注册信息
+     */
+    fun saveUser(user: User) {
+        prefs.edit().apply {
+            putString(KEY_USER_DATA, user.toJson().toString())
+            putString(KEY_USER_NAME, user.userName)
+            putBoolean(KEY_IS_REGISTERED, true)
+            apply()
+        }
+    }
+
+    /**
+     * 获取当前用户
+     */
+    fun getUser(): User? {
+        val jsonStr = prefs.getString(KEY_USER_DATA, null) ?: return null
+        return User.fromJsonString(jsonStr)
+    }
+
+    /**
+     * 更新用户名
+     */
+    fun updateUserName(newName: String) {
+        val user = getUser() ?: User(getUserId(), newName)
+        user.userName = newName
+        saveUser(user)
+    }
+
+    /**
+     * 获取用户名（兼容旧版）
+     */
     fun getUserName(): String {
-        return prefs.getString(KEY_USER_NAME, "") ?: ""
+        return getUser()?.userName ?: prefs.getString(KEY_USER_NAME, "") ?: ""
+    }
+
+    /**
+     * 清除用户数据（退出登录）
+     */
+    fun clearUserData() {
+        prefs.edit().apply {
+            remove(KEY_USER_DATA)
+            remove(KEY_USER_NAME)
+            remove(KEY_IS_REGISTERED)
+            // 保留 userId 和好友/路线数据
+            apply()
+        }
+    }
+
+    // ==================== 兼容旧版（已废弃）====================
+
+    @Deprecated("使用 saveUser() 替代")
+    fun setUserName(name: String) {
+        prefs.edit().putString(KEY_USER_NAME, name).apply()
     }
 
     // 好友列表
