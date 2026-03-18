@@ -1,11 +1,16 @@
 package com.example.locationshare
 
 import android.content.Intent
+import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.locationshare.api.ApiService
 import com.example.locationshare.databinding.ActivityProfileBinding
@@ -23,8 +28,24 @@ class ProfileActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 设置状态栏透明，内容延伸到状态栏下方
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            window.statusBarColor = Color.TRANSPARENT
+            window.decorView.systemUiVisibility =
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        }
+
         binding = ActivityProfileBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // 为顶部栏添加状态栏高度边距
+        ViewCompat.setOnApplyWindowInsetsListener(binding.headerContainer) { view, insets ->
+            val statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            view.setPadding(view.paddingLeft, statusBarHeight + 16, view.paddingRight, view.paddingBottom)
+            insets
+        }
 
         prefsManager = PrefsManager(this)
         apiService = ApiService(this)
@@ -39,8 +60,13 @@ class ProfileActivity : AppCompatActivity() {
             finish()
         }
 
-        // 修改昵称
+        // 编辑资料按钮（头像下方）
         binding.btnEditName.setOnClickListener {
+            showEditNameDialog()
+        }
+
+        // 修改昵称（列表项）
+        binding.btnEditNameItem.setOnClickListener {
             showEditNameDialog()
         }
 
@@ -78,12 +104,12 @@ class ProfileActivity : AppCompatActivity() {
             setText(currentName)
             setSelection(currentName.length)
             hint = "输入新昵称（2-20个字符）"
-            setTextColor(resources.getColor(android.R.color.white, null))
+            setTextColor(resources.getColor(android.R.color.black, null))
             setHintTextColor(resources.getColor(android.R.color.darker_gray, null))
-            setPadding(32, 32, 32, 32)
+            setPadding(48, 32, 48, 32)
         }
 
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
             .setTitle("修改昵称")
             .setView(editText)
             .setPositiveButton("保存") { _, _ ->
@@ -112,7 +138,7 @@ class ProfileActivity : AppCompatActivity() {
     }
 
     private fun showClearDataDialog() {
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
             .setTitle("清除所有数据")
             .setMessage("这将删除所有好友、路线和设置，确定要继续吗？")
             .setPositiveButton("清除") { _, _ ->
@@ -129,7 +155,7 @@ class ProfileActivity : AppCompatActivity() {
     }
 
     private fun showLogoutDialog() {
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Light_Dialog_Alert)
             .setTitle("退出登录")
             .setMessage("退出后将清除登录状态，下次需要重新设置昵称。确定要退出吗？")
             .setPositiveButton("退出") { _, _ ->

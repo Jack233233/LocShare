@@ -2,9 +2,14 @@ package com.example.locationshare
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.amap.api.location.AMapLocationClient
 import com.amap.api.location.AMapLocationClientOption
 import com.amap.api.maps.AMap
@@ -38,8 +43,24 @@ class RouteMapPickerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 设置透明状态栏，让地图延伸到状态栏下方
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            window.statusBarColor = Color.TRANSPARENT
+            window.decorView.systemUiVisibility =
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        }
+
         binding = ActivityRouteMapPickerBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // 为顶部栏添加状态栏高度边距
+        ViewCompat.setOnApplyWindowInsetsListener(binding.headerContainer) { view, insets ->
+            val statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            view.setPadding(view.paddingLeft, statusBarHeight + 16, view.paddingRight, view.paddingBottom)
+            insets
+        }
 
         val type = intent.getStringExtra(EXTRA_TYPE) ?: "start"
         binding.tvTitle.text = if (type == "start") "选择起点" else "选择终点"

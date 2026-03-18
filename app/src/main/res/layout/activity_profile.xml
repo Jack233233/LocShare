@@ -1,17 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
-    android:orientation="vertical">
+    android:background="#F5F5F5"
+    android:orientation="vertical"
+    android:fitsSystemWindows="false">
 
-    <!-- 标题栏 -->
+    <!-- 顶部栏 - 带安全区域 -->
     <LinearLayout
+        android:id="@+id/headerContainer"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:gravity="center_vertical"
+        android:layout_height="wrap_content"
+        android:background="@android:color/white"
         android:orientation="horizontal"
-        android:paddingHorizontal="16dp">
+        android:padding="16dp"
+        android:elevation="2dp"
+        android:gravity="center_vertical">
 
         <ImageButton
             android:id="@+id/btnBack"
@@ -20,152 +25,204 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="返回"
             android:src="@android:drawable/ic_menu_close_clear_cancel"
-            android:tint="#FFFFFF" />
+            app:tint="#2C3E50" />
 
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:layout_marginStart="16dp"
             android:text="个人中心"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
+            android:textColor="#2C3E50"
+            android:textSize="18sp"
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- 用户信息卡片 -->
-    <LinearLayout
+    <!-- 可滚动内容 -->
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:background="@drawable/bg_input_rounded"
-        android:orientation="vertical"
-        android:padding="24dp">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
 
-        <TextView
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:layout_gravity="center_horizontal"
-            android:background="@drawable/bg_circle_green"
-            android:gravity="center"
-            android:text="我"
-            android:textColor="#FFFFFF"
-            android:textSize="36sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tvProfileUserName"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="16dp"
-            android:text="用户名"
-            android:textColor="#FFFFFF"
-            android:textSize="24sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tvProfileUserId"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="8dp"
-            android:fontFamily="monospace"
-            android:text="ID: xxxxxxxx"
-            android:textColor="#888888"
-            android:textSize="12sp" />
-    </LinearLayout>
-
-    <!-- 功能列表 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:background="@drawable/bg_input_rounded"
-        android:orientation="vertical">
-
-        <!-- 修改昵称 -->
         <LinearLayout
-            android:id="@+id/btnEditName"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="16dp">
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
 
-            <TextView
-                android:layout_width="0dp"
+            <!-- 用户信息卡片 -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="修改昵称"
-                android:textColor="#FFFFFF"
-                android:textSize="16sp" />
+                android:background="@drawable/bg_card_white"
+                android:orientation="vertical"
+                android:padding="24dp"
+                android:gravity="center_horizontal">
 
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_menu_edit"
-                android:tint="#888888" />
-        </LinearLayout>
+                <!-- 头像 -->
+                <FrameLayout
+                    android:layout_width="88dp"
+                    android:layout_height="88dp">
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#333333" />
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_avatar_gradient" />
 
-        <!-- 清除数据 -->
-        <LinearLayout
-            android:id="@+id/btnClearData"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="16dp">
+                    <TextView
+                        android:id="@+id/tvAvatar"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:text="我"
+                        android:textColor="#FFFFFF"
+                        android:textSize="36sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
 
-            <TextView
-                android:layout_width="0dp"
+                <!-- 用户名 -->
+                <TextView
+                    android:id="@+id/tvProfileUserName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="用户名"
+                    android:textColor="#2C3E50"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <!-- ID -->
+                <TextView
+                    android:id="@+id/tvProfileUserId"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:fontFamily="monospace"
+                    android:text="ID: xxxxxxxx"
+                    android:textColor="#999999"
+                    android:textSize="12sp" />
+
+                <!-- 编辑按钮 -->
+                <TextView
+                    android:id="@+id/btnEditName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/btn_outline"
+                    android:gravity="center"
+                    android:paddingHorizontal="20dp"
+                    android:text="编辑资料"
+                    android:textColor="#FF8A65"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- 功能列表卡片 -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="清除所有数据"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/bg_card_white"
+                android:orientation="vertical">
+
+                <!-- 修改昵称 -->
+                <LinearLayout
+                    android:id="@+id/btnEditNameItem"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@android:drawable/ic_menu_edit"
+                        app:tint="#FF8A65" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_weight="1"
+                        android:text="修改昵称"
+                        android:textColor="#2C3E50"
+                        android:textSize="15sp" />
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@android:drawable/ic_media_next"
+                        app:tint="#CCCCCC" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="56dp"
+                    android:background="#F0F0F0" />
+
+                <!-- 清除数据 -->
+                <LinearLayout
+                    android:id="@+id/btnClearData"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@android:drawable/ic_menu_delete"
+                        app:tint="#FF5252" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_weight="1"
+                        android:text="清除所有数据"
+                        android:textColor="#FF5252"
+                        android:textSize="15sp" />
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@android:drawable/ic_media_next"
+                        app:tint="#CCCCCC" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 退出登录按钮 -->
+            <TextView
+                android:id="@+id/btnLogout"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:layout_marginTop="24dp"
+                android:background="@drawable/bg_card_white"
+                android:gravity="center"
+                android:text="退出登录"
                 android:textColor="#FF5252"
-                android:textSize="16sp" />
+                android:textSize="15sp"
+                android:textStyle="bold" />
 
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_menu_delete"
-                android:tint="#FF5252" />
+            <!-- 版本号 -->
+            <TextView
+                android:id="@+id/tvVersion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="32dp"
+                android:text="版本 1.0.0"
+                android:textColor="#BBBBBB"
+                android:textSize="12sp" />
         </LinearLayout>
-
-    </LinearLayout>
-
-    <!-- 版本信息 -->
-    <TextView
-        android:id="@+id/tvVersion"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginTop="32dp"
-        android:text="版本 1.0.0"
-        android:textColor="#666666"
-        android:textSize="12sp" />
-
-    <!-- 退出登录 -->
-    <Button
-        android:id="@+id/btnLogout"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="32dp"
-        android:background="@drawable/bg_input_rounded"
-        android:text="退出登录"
-        android:textColor="#FF5252"
-        android:textSize="16sp"
-        android:textStyle="bold" />
-
+    </ScrollView>
 </LinearLayout>
