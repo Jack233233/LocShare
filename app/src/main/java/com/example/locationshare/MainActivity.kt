@@ -79,6 +79,27 @@ class MainActivity : AppCompatActivity() {
         val sharedWith: String
     )
 
+    // 好友路线模式（接收方）
+    private var isFriendRouteMode = false
+    private var friendRouteData: FriendRouteData? = null
+
+    data class FriendRouteData(
+        val friendId: String,
+        val friendName: String,
+        val routeId: String,
+        val routeName: String,
+        val startLat: Double,
+        val startLng: Double,
+        val endLat: Double,
+        val endLng: Double,
+        val endName: String
+    )
+
+    // 好友路线标记
+    private var friendRoutePolyline: com.amap.api.maps.model.Polyline? = null
+    private var friendStartMarker: Marker? = null
+    private var friendEndMarker: Marker? = null
+
     // 路线标记
     private var routePolyline: com.amap.api.maps.model.Polyline? = null
     private var startMarker: Marker? = null
@@ -340,6 +361,98 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ==================== 好友路线模式（接收方）====================
+
+    // 绘制好友的路线
+    private fun drawFriendRouteOnMap() {
+        friendRouteData?.let { route ->
+            val startLatLng = LatLng(route.startLat, route.startLng)
+            val endLatLng = LatLng(route.endLat, route.endLng)
+
+            // 添加起点标记（蓝色）
+            friendStartMarker = aMap?.addMarker(MarkerOptions()
+                .position(startLatLng)
+                .title("起点: ${route.routeName}")
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
+            )
+
+            // 添加终点标记（红色）
+            friendEndMarker = aMap?.addMarker(MarkerOptions()
+                .position(endLatLng)
+                .title("终点: ${route.endName}")
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
+            )
+
+            // 绘制路线
+            friendRoutePolyline = aMap?.addPolyline(com.amap.api.maps.model.PolylineOptions()
+                .add(startLatLng, endLatLng)
+                .width(12f)
+                .color(android.graphics.Color.parseColor("#FF8A65"))
+                .geodesic(true)
+            )
+
+            // 调整视野显示完整路线
+            val bounds = com.amap.api.maps.model.LatLngBounds.builder()
+                .include(startLatLng)
+                .include(endLatLng)
+                .build()
+            aMap?.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
+        }
+    }
+
+    // 显示好友路线悬浮按钮
+    private fun showFriendRouteFab() {
+        runOnUiThread {
+            // 修改悬浮按钮文字和颜色
+            binding.routeShareFab.text = "👤 好友共享行程中"
+            binding.routeShareFab.setBackgroundResource(R.drawable.bg_friend_route_fab)
+            binding.routeShareFab.visibility = View.VISIBLE
+            binding.routeShareFab.setOnClickListener { showFriendRouteDialog() }
+
+            // 设置弹窗按钮点击事件
+            binding.btnStopRouteShare.setOnClickListener {
+                hideFriendRouteMode()
+                hideRouteShareDialog()
+            }
+            binding.btnCloseDialog.setOnClickListener { hideRouteShareDialog() }
+            binding.routeShareDialog.setOnClickListener { hideRouteShareDialog() }
+
+            // 初始化弹窗信息
+            friendRouteData?.let { route ->
+                binding.tvRouteName.text = route.routeName
+                binding.tvRouteEnd.text = "终点：${route.endName}"
+                binding.tvSharedWith.text = "共享好友：${route.friendName}"
+                binding.tvRemainingDistance.text = "--"
+            }
+        }
+    }
+
+    // 显示好友路线弹窗
+    private fun showFriendRouteDialog() {
+        runOnUiThread {
+            binding.routeShareDialog.visibility = View.VISIBLE
+        }
+    }
+
+    // 隐藏好友路线模式
+    private fun hideFriendRouteMode() {
+        isFriendRouteMode = false
+        friendRouteData = null
+
+        // 清除路线标记
+        friendRoutePolyline?.remove()
+        friendRoutePolyline = null
+        friendStartMarker?.remove()
+        friendStartMarker = null
+        friendEndMarker?.remove()
+        friendEndMarker = null
+
+        // 恢复悬浮按钮
+        binding.routeShareFab.visibility = View.GONE
+        binding.routeShareFab.text = "📍 行程共享中"
+        binding.routeShareFab.setBackgroundResource(R.drawable.bg_route_share_fab)
+    }
+
     private fun initMap() {
         aMap = mapView?.map
         aMap?.apply {
@@ -481,6 +594,26 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             emit("join", data)
                         }
+
+                        // 如果是路线模式，发送路线信息给好友
+                        if (isRouteMode && routeData != null) {
+                            Thread.sleep(500) // 等待好友加入房间
+                            val routeInfo = JSONObject().apply {
+                                put("pairRoomId", currentRoomId)
+                                put("sharedWith", routeData?.sharedWith)
+                                put("routeData", JSONObject().apply {
+                                    put("id", routeData?.id)
+                                    put("name", routeData?.name)
+                                    put("startLat", routeData?.startLat)
+                                    put("startLng", routeData?.startLng)
+                                    put("endLat", routeData?.endLat)
+                                    put("endLng", routeData?.endLng)
+                                    put("endName", routeData?.endName)
+                                })
+                            }
+                            emit("start-route-sharing", routeInfo)
+                            android.util.Log.d("RouteMode", "Sent route info to friend")
+                        }
                     }
 
                     on("location-update") { args ->
@@ -495,6 +628,41 @@ class MainActivity : AppCompatActivity() {
                         runOnUiThread {
                             val name = data.optString("userName")
                             webView.evaluateJavascript("window.onUserJoin('$name')", null)
+                        }
+                    }
+
+                    // 好友开始路线共享
+                    on("friend-route-started") { args ->
+                        val data = args[0] as JSONObject
+                        val routeJson = data.optJSONObject("routeData")
+                        val friendName = data.optString("userName")
+                        val friendId = data.optString("userId")
+
+                        runOnUiThread {
+                            // 设置为好友路线模式
+                            isFriendRouteMode = true
+                            friendRouteData = FriendRouteData(
+                                friendId = friendId,
+                                friendName = friendName,
+                                routeId = routeJson?.optString("id") ?: "",
+                                routeName = routeJson?.optString("name") ?: "",
+                                startLat = routeJson?.optDouble("startLat") ?: 0.0,
+                                startLng = routeJson?.optDouble("startLng") ?: 0.0,
+                                endLat = routeJson?.optDouble("endLat") ?: 0.0,
+                                endLng = routeJson?.optDouble("endLng") ?: 0.0,
+                                endName = routeJson?.optString("endName") ?: ""
+                            )
+
+                            // 绘制好友的路线
+                            drawFriendRouteOnMap()
+
+                            // 显示悬浮窗
+                            showFriendRouteFab()
+
+                            // 显示通知
+                            Toast.makeText(this@MainActivity, "$friendName 开始共享行程", Toast.LENGTH_LONG).show()
+
+                            android.util.Log.d("RouteMode", "Received friend route: ${friendRouteData?.routeName}")
                         }
                     }
 
@@ -580,6 +748,12 @@ class MainActivity : AppCompatActivity() {
                 startMarker = null
                 endMarker?.remove()
                 endMarker = null
+            }
+
+            // 清理好友路线模式
+            if (isFriendRouteMode) {
+                hideFriendRouteMode()
+                binding.routeShareDialog.visibility = View.GONE
             }
         }
     }
