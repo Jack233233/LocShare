@@ -169,6 +169,21 @@ class MainActivity : AppCompatActivity() {
         initBottomSheet()
 
         checkLocationPermission()
+
+        // 初始化跟随我按钮
+        initFollowMeButton()
+    }
+
+    // 初始化跟随我按钮
+    private fun initFollowMeButton() {
+        binding.btnFollowMe.setOnClickListener {
+            myLocation?.let { location ->
+                aMap?.animateCamera(CameraUpdateFactory.changeLatLng(location))
+                Toast.makeText(this, "已定位到我的位置", Toast.LENGTH_SHORT).show()
+            } ?: run {
+                Toast.makeText(this, "正在获取位置...", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     // SingleTop 模式下通过 onNewIntent 接收数据
@@ -880,17 +895,25 @@ class MainActivity : AppCompatActivity() {
                         val data = args[0] as JSONObject
                         val fromUserId = data.optString("userId")
 
+                        android.util.Log.d("RouteListener", "Received location update from $fromUserId, friendRouteMode=$isFriendRouteMode, friendLocationMode=$isFriendLocationMode")
+
                         // 处理好友路线模式的位置
                         if (isFriendRouteMode && fromUserId == friendRouteData?.friendId) {
+                            android.util.Log.d("RouteListener", "Updating route friend location")
                             runOnUiThread {
                                 updateFriendLocationOnMap(data, isRouteMode = true)
                             }
                         }
                         // 处理好友位置共享模式的位置
                         else if (isFriendLocationMode && fromUserId == friendLocationData?.friendId) {
+                            android.util.Log.d("RouteListener", "Updating location friend location")
                             runOnUiThread {
                                 updateFriendLocationOnMap(data, isRouteMode = false)
                             }
+                        }
+                        // 如果还没有设置模式，但收到了位置，保存到临时变量
+                        else {
+                            android.util.Log.d("RouteListener", "Location received but no active mode, pending friendId: $fromUserId")
                         }
                     }
 
@@ -1188,6 +1211,17 @@ class MainActivity : AppCompatActivity() {
 
         if (isSharingLocation) return
 
+        // 标记已首次定位，防止自动跟随
+        isFirstLocation = false
+
+        // 重新配置定位选项为持续定位
+        locationClient?.setLocationOption(AMapLocationClientOption().apply {
+            locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
+            interval = 3000  // 3秒更新一次
+            isOnceLocation = false  // 持续定位
+            isNeedAddress = false
+        })
+
         locationClient?.setLocationListener { location ->
             if (location.errorCode == 0) {
                 val lat = location.latitude
@@ -1378,14 +1412,12 @@ class MainActivity : AppCompatActivity() {
                     isOnceLocation = true  // 只定位一次
                     isNeedAddress = false
                 })
-                // 设置定位监听，获取到位置后移动到该位置
+                // 设置定位监听，只获取位置不移动相机
                 setLocationListener { location ->
                     if (location.errorCode == 0) {
                         val latLng = LatLng(location.latitude, location.longitude)
-                        runOnUiThread {
-                            aMap?.moveCamera(CameraUpdateFactory.changeLatLng(latLng))
-                            aMap?.moveCamera(CameraUpdateFactory.zoomTo(15f))
-                        }
+                        myLocation = latLng
+                        // 只记录位置，不移动相机
                     }
                 }
             }
