@@ -2,19 +2,24 @@ package com.example.locationshare
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.amap.api.location.AMapLocationClient
 import com.amap.api.location.AMapLocationClientOption
 import com.amap.api.maps.AMap
@@ -24,23 +29,24 @@ import com.amap.api.maps.model.BitmapDescriptorFactory
 import com.amap.api.maps.model.LatLng
 import com.amap.api.maps.model.Marker
 import com.amap.api.maps.model.MarkerOptions
-import com.amap.api.maps.model.MyLocationStyle
-import com.example.locationshare.adapter.FriendAdapter
 import com.example.locationshare.api.ApiService
+import com.example.locationshare.bridge.WebAppBridge
 import com.example.locationshare.databinding.ActivityMainBinding
-import com.example.locationshare.model.Friend
-import com.example.locationshare.model.ShareMode
 import com.example.locationshare.service.LocationShareService
 import com.example.locationshare.utils.PrefsManager
 import io.socket.client.IO
 import io.socket.client.Socket
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.util.*
 
+/**
+ * 主界面 - WebView + 原生地图混合架构
+ * WebView 负责底部抽屉UI，原生高德地图负责地图显示
+ */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var webView: WebView
     private var mapView: MapView? = null
     private var aMap: AMap? = null
     private var locationClient: AMapLocationClient? = null
@@ -48,19 +54,15 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var prefsManager: PrefsManager
     private lateinit var apiService: ApiService
+    private lateinit var webAppBridge: WebAppBridge
+    private lateinit var bottomSheetBehavior: BottomSheetBehavior<FrameLayout>
 
-    private var currentMode: ShareMode = ShareMode.NONE
     private var currentRoomId: String = ""
     private var userName: String = ""
     private var userId: String = ""
     private var isSharingLocation = false
     private var isFollowing = false
     private var isFirstLocation = true
-
-    // 好友列表
-    private lateinit var friendAdapter: FriendAdapter
-    private var friends: List<Friend> = emptyList()
-    private var selectedFriend: Friend? = null
 
     // 标记点管理
     private val userMarkers = mutableMapOf<String, Marker>()
@@ -73,7 +75,6 @@ class MainActivity : AppCompatActivity() {
         var lastUpdateTime: Long = 0
     )
     private val userLocationInfos = mutableMapOf<String, UserLocationInfo>()
-    private var selectedUserId: String? = null
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST = 1001
@@ -99,8 +100,55 @@ class MainActivity : AppCompatActivity() {
         mapView?.onCreate(savedInstanceState)
         initMap()
 
-        initViews()
+        // 初始化 WebView
+        initWebView()
+
+        // 初始化 BottomSheet
+        initBottomSheet()
+
         checkLocationPermission()
+    }
+
+    // 初始化 BottomSheet
+    private fun initBottomSheet() {
+        bottomSheetBehavior = BottomSheetBehavior.from(binding.bottomSheet).apply {
+            // 设置默认状态为折叠（只显示 peekHeight）
+            state = BottomSheetBehavior.STATE_COLLAPSED
+            // 允许拖动展开
+            isDraggable = true
+            // 根据内容调整高度
+            isFitToContents = true
+            // 设置回调监听状态变化
+            addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+                override fun onStateChanged(bottomSheet: View, newState: Int) {
+                    when (newState) {
+                        BottomSheetBehavior.STATE_EXPANDED -> {
+                            webView.evaluateJavascript("window.onSheetState('expanded')", null)
+                        }
+                        BottomSheetBehavior.STATE_COLLAPSED -> {
+                            webView.evaluateJavascript("window.onSheetState('collapsed')", null)
+                        }
+                        else -> {}
+                    }
+                }
+
+                override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                    // slideOffset: 0 (折叠) ~ 1 (展开)
+                    // 可以在这里添加视差效果
+                }
+            })
+        }
+    }
+
+    // 切换抽屉状态
+    fun toggleSheet() {
+        bottomSheetBehavior.apply {
+            if (this.state == BottomSheetBehavior.STATE_EXPANDED) {
+                this.state = BottomSheetBehavior.STATE_COLLAPSED
+            } else {
+                this.state = BottomSheetBehavior.STATE_EXPANDED
+            }
+        }
     }
 
     private fun initMap() {
@@ -114,332 +162,103 @@ class MainActivity : AppCompatActivity() {
             setOnMarkerClickListener { marker ->
                 val userId = userMarkers.entries.find { it.value == marker }?.key
                 userId?.let {
-                    selectedUserId = it
-                    showUserInfoPanel(it, marker.title ?: "未知用户")
+                    val name = marker.title ?: "未知用户"
+                    webView.evaluateJavascript("window.onMarkerClicked('$it', '$name')", null)
                 }
                 true
             }
-
-            // 地图点击监听（关闭信息面板）
-            setOnMapClickListener {
-                hideUserInfoPanel()
-                selectedUserId = null
-            }
         }
     }
 
-    private fun showUserInfoPanel(userId: String, userName: String) {
-        val info = userLocationInfos[userId]
-        binding.tvSelectedUserName.text = userName
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun initWebView() {
+        webView = binding.webView
+        webAppBridge = WebAppBridge(this, webView, this, prefsManager, apiService, lifecycleScope)
 
-        if (info != null) {
-            // 速度：m/s 转换为 km/h
-            val speedKmh = info.speed * 3.6f
-            binding.tvSpeed.text = String.format("%.1f km/h", speedKmh)
-
-            // 方向
-            binding.tvDirection.text = bearingToDirection(info.bearing)
-        } else {
-            binding.tvSpeed.text = "-- km/h"
-            binding.tvDirection.text = "--"
-        }
-
-        binding.cardUserInfo.visibility = View.VISIBLE
-    }
-
-    private fun hideUserInfoPanel() {
-        binding.cardUserInfo.visibility = View.GONE
-    }
-
-    private fun bearingToDirection(bearing: Float): String {
-        return when (bearing) {
-            in 0f..22.5f, in 337.5f..360f -> "北 ↑"
-            in 22.5f..67.5f -> "东北 ↗"
-            in 67.5f..112.5f -> "东 →"
-            in 112.5f..157.5f -> "东南 ↘"
-            in 157.5f..202.5f -> "南 ↓"
-            in 202.5f..247.5f -> "西南 ↙"
-            in 247.5f..292.5f -> "西 ←"
-            in 292.5f..337.5f -> "西北 ↖"
-            else -> "北 ↑"
-        }
-    }
-
-    /**
-     * 加载并显示用户信息
-     */
-    private fun loadUserInfo() {
-        val user = prefsManager.getUser()
-        if (user != null) {
-            userName = user.userName
-            binding.tvUserName.text = user.userName
-            binding.tvUserIdShort.text = "ID: ${user.userId.takeLast(8)}"
-        } else {
-            // 未注册，不应该发生（WelcomeActivity 会拦截）
-            userName = ""
-            binding.tvUserName.text = "未登录"
-            binding.tvUserIdShort.text = "ID: ..."
-        }
-    }
-
-    private fun initViews() {
-        // 加载用户信息
-        loadUserInfo()
-
-        // 用户信息区域点击 - 跳转到个人中心
-        binding.layoutUserInfo.setOnClickListener {
-            startActivity(Intent(this, ProfileActivity::class.java))
-        }
-
-        // 模式切换按钮
-        binding.btnModePair.setOnClickListener {
-            switchMode(ShareMode.PAIR)
-        }
-        binding.btnModeMulti.setOnClickListener {
-            switchMode(ShareMode.MULTI)
-        }
-
-        // 路线管理按钮
-        binding.btnRouteManager.setOnClickListener {
-            startActivity(android.content.Intent(this, RouteManagerActivity::class.java))
-        }
-
-        // 生成配对码
-        binding.btnGenerateCode.setOnClickListener {
-            generatePairCode()
-        }
-
-        // 点击配对码区域收起
-        binding.layoutPairCodeDisplay.setOnClickListener {
-            binding.layoutPairCodeDisplay.visibility = View.GONE
-        }
-
-        // 输入配对码
-        binding.btnInputCode.setOnClickListener {
-            showInputCodeDialog()
-        }
-
-        // 好友列表折叠
-        var isFriendsExpanded = true
-        binding.layoutFriendsHeader.setOnClickListener {
-            isFriendsExpanded = !isFriendsExpanded
-            binding.recyclerFriends.visibility = if (isFriendsExpanded) View.VISIBLE else View.GONE
-            binding.ivExpandIcon.rotation = if (isFriendsExpanded) 0f else 180f
-        }
-
-        // 初始化好友列表
-        friendAdapter = FriendAdapter(
-            onFriendClick = { friend ->
-                selectedFriend = friend
-                friendAdapter.setSelected(friend.friendId)
-                updateShareButtonState()
-            },
-            onDeleteClick = { friend ->
-                showDeleteFriendDialog(friend)
-            }
-        )
-        binding.recyclerFriends.layoutManager = LinearLayoutManager(this)
-        binding.recyclerFriends.adapter = friendAdapter
-
-        // 开始/停止共享
-        binding.btnJoin.setOnClickListener {
-            if (isSharingLocation) {
-                stopSharing()
+        webView.apply {
+            // 设置 WebView 透明背景
+            setBackgroundColor(Color.TRANSPARENT)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                setLayerType(View.LAYER_TYPE_HARDWARE, null)
             } else {
-                startSharing()
+                setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             }
-        }
 
-        // 跟随按钮
-        binding.btnFollow.setOnClickListener {
-            isFollowing = !isFollowing
-            binding.btnFollow.isChecked = isFollowing
-            Toast.makeText(this, if (isFollowing) "地图跟随开启" else "地图跟随关闭", Toast.LENGTH_SHORT).show()
-        }
-
-        // 房间号输入监听
-        binding.etRoomId.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
-                updateShareButtonState()
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                allowFileAccess = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                cacheMode = WebSettings.LOAD_DEFAULT
+                setRenderPriority(WebSettings.RenderPriority.HIGH)
             }
-        })
 
-        // 加载好友列表
-        loadFriends()
-    }
-
-    private fun switchMode(mode: ShareMode) {
-        currentMode = mode
-        when (mode) {
-            ShareMode.PAIR -> {
-                binding.layoutPairMode.visibility = View.VISIBLE
-                binding.layoutMultiMode.visibility = View.GONE
-                binding.btnModePair.setBackgroundColor(Color.parseColor("#9C27B0"))
-                binding.btnModeMulti.setBackgroundColor(Color.parseColor("#333333"))
-                loadFriends()
-            }
-            ShareMode.MULTI -> {
-                binding.layoutPairMode.visibility = View.GONE
-                binding.layoutMultiMode.visibility = View.VISIBLE
-                binding.btnModePair.setBackgroundColor(Color.parseColor("#333333"))
-                binding.btnModeMulti.setBackgroundColor(Color.parseColor("#9C27B0"))
-                selectedFriend = null
-            }
-            else -> {
-                binding.layoutPairMode.visibility = View.GONE
-                binding.layoutMultiMode.visibility = View.GONE
-            }
-        }
-        updateShareButtonState()
-    }
-
-    private fun updateShareButtonState() {
-        val canStart = when (currentMode) {
-            ShareMode.PAIR -> selectedFriend != null
-            ShareMode.MULTI -> binding.etRoomId.text.toString().trim().isNotEmpty()
-            else -> false
-        }
-        binding.btnJoin.isEnabled = canStart || isSharingLocation
-        binding.btnJoin.text = if (isSharingLocation) "停止共享" else "开始共享"
-    }
-
-    private fun generatePairCode() {
-        lifecycleScope.launch {
-            val result = apiService.generatePairCode()
-            result.onSuccess { code ->
-                binding.tvPairCode.text = code
-                binding.layoutPairCodeDisplay.visibility = View.VISIBLE
-                Toast.makeText(this@MainActivity, "配对码已生成: $code", Toast.LENGTH_LONG).show()
-            }.onFailure { error ->
-                Toast.makeText(this@MainActivity, "生成失败: ${error.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun showInputCodeDialog() {
-        val input = android.widget.EditText(this).apply {
-            hint = "请输入6位配对码"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            maxLines = 1
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle("添加好友")
-            .setView(input)
-            .setPositiveButton("添加") { _, _ ->
-                val code = input.text.toString().trim()
-                if (code.length == 6) {
-                    pairWithCode(code)
-                } else {
-                    Toast.makeText(this, "请输入6位配对码", Toast.LENGTH_SHORT).show()
+            // 设置 WebViewClient
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    request: WebResourceRequest?
+                ): Boolean {
+                    return false
                 }
             }
-            .setNegativeButton("取消", null)
-            .show()
-    }
 
-    private fun pairWithCode(code: String) {
-        lifecycleScope.launch {
-            val result = apiService.pairWithCode(code)
-            result.onSuccess { friend ->
-                Toast.makeText(this@MainActivity, "成功添加好友: ${friend.friendName}", Toast.LENGTH_SHORT).show()
-                loadFriends()
-            }.onFailure { error ->
-                Toast.makeText(this@MainActivity, "添加失败: ${error.message}", Toast.LENGTH_SHORT).show()
-            }
+            webChromeClient = WebChromeClient()
+
+            // 添加 JS 桥接
+            addJavascriptInterface(webAppBridge, WebAppBridge.INTERFACE_NAME)
+
+            // 加载本地 HTML
+            loadUrl("file:///android_asset/web/index.html")
         }
     }
 
-    private fun loadFriends() {
-        lifecycleScope.launch {
-            val result = apiService.fetchFriendsFromServer()
-            result.onSuccess { friendList ->
-                friends = friendList
-                friendAdapter.setFriends(friends)
-                binding.tvFriendCount.text = "(${friends.size})"
-            }.onFailure {
-                // 使用本地缓存
-                friends = apiService.getFriends()
-                friendAdapter.setFriends(friends)
-                binding.tvFriendCount.text = "(${friends.size})"
-            }
-        }
-    }
+    // ========== 公开方法供 WebAppBridge 调用 ==========
 
-    private fun showDeleteFriendDialog(friend: Friend) {
-        AlertDialog.Builder(this)
-            .setTitle("删除好友")
-            .setMessage("确定要删除 ${friend.friendName} 吗？")
-            .setPositiveButton("删除") { _, _ ->
-                deleteFriend(friend.friendId)
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    private fun deleteFriend(friendId: String) {
-        lifecycleScope.launch {
-            val result = apiService.deleteFriend(friendId)
-            result.onSuccess {
-                Toast.makeText(this@MainActivity, "已删除", Toast.LENGTH_SHORT).show()
-                loadFriends()
-            }.onFailure { error ->
-                Toast.makeText(this@MainActivity, "删除失败: ${error.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun startSharing() {
-        // 从 PrefsManager 获取用户名
-        val name = prefsManager.getUserName()
-        if (name.isEmpty()) {
-            Toast.makeText(this, "请先设置昵称", Toast.LENGTH_SHORT).show()
-            return
-        }
+    fun startPairSharing(name: String, roomId: String) {
         userName = name
+        currentRoomId = roomId
 
-        // 检查通知权限
         if (!checkNotificationPermission()) {
             requestNotificationPermission()
             return
         }
 
-        when (currentMode) {
-            ShareMode.PAIR -> {
-                val friend = selectedFriend
-                if (friend == null) {
-                    Toast.makeText(this, "请先选择一个好友", Toast.LENGTH_SHORT).show()
-                    return
-                }
-                currentRoomId = friend.pairRoomId
-
-                // 启动前台服务
-                LocationShareService.start(this)
-
-                connectSocket(isPairMode = true)
-            }
-            ShareMode.MULTI -> {
-                val roomId = binding.etRoomId.text.toString().trim()
-                if (roomId.isEmpty()) {
-                    Toast.makeText(this, "请输入房间号", Toast.LENGTH_SHORT).show()
-                    return
-                }
-                currentRoomId = roomId
-
-                // 启动前台服务
-                LocationShareService.start(this)
-
-                connectSocket(isPairMode = false)
-            }
-            else -> {}
-        }
+        LocationShareService.start(this)
+        connectSocket(isPairMode = true)
     }
 
-    private fun stopSharing() {
+    fun startMultiSharing(name: String, roomId: String) {
+        userName = name
+        currentRoomId = roomId
+
+        if (!checkNotificationPermission()) {
+            requestNotificationPermission()
+            return
+        }
+
+        LocationShareService.start(this)
+        connectSocket(isPairMode = false)
+    }
+
+    fun stopSharing() {
         exitSharing()
     }
+
+    fun toggleFollow() {
+        isFollowing = !isFollowing
+        Toast.makeText(this, if (isFollowing) "地图跟随开启" else "地图跟随关闭", Toast.LENGTH_SHORT).show()
+    }
+
+    fun isSharingLocation(): Boolean = isSharingLocation
+
+    fun moveCameraTo(lat: Double, lng: Double) {
+        aMap?.moveCamera(CameraUpdateFactory.changeLatLng(LatLng(lat, lng)))
+    }
+
+    fun getCurrentLocation(): LatLng? = myLocation
+
+    // ========== Socket.io 连接 ==========
 
     private fun connectSocket(isPairMode: Boolean) {
         lifecycleScope.launch {
@@ -448,9 +267,8 @@ class MainActivity : AppCompatActivity() {
                     on(Socket.EVENT_CONNECT) {
                         android.util.Log.d("LocationShare", "Socket connected")
                         runOnUiThread {
-                            Toast.makeText(this@MainActivity, "已连接服务器", Toast.LENGTH_SHORT).show()
                             startSharingLocation()
-                            updateShareButtonState()
+                            webView.evaluateJavascript("window.onShareState(true)", null)
                         }
 
                         val data = JSONObject().apply {
@@ -480,18 +298,17 @@ class MainActivity : AppCompatActivity() {
                     on("user-joined") { args ->
                         val data = args[0] as JSONObject
                         runOnUiThread {
-                            Toast.makeText(
-                                this@MainActivity,
-                                "${data.optString("userName")} 加入了",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            val name = data.optString("userName")
+                            webView.evaluateJavascript("window.onUserJoin('$name')", null)
                         }
                     }
 
                     on("user-left") { args ->
                         val data = args[0] as JSONObject
                         runOnUiThread {
-                            removeUserMarker(data.optString("userId"))
+                            val leftUserId = data.optString("userId")
+                            removeUserMarker(leftUserId)
+                            webView.evaluateJavascript("window.onUserLeave('$leftUserId')", null)
                         }
                     }
 
@@ -508,21 +325,15 @@ class MainActivity : AppCompatActivity() {
                         val data = args[0] as JSONObject
                         runOnUiThread {
                             val friendName = data.optString("friendName", "新好友")
-                            Toast.makeText(
-                                this@MainActivity,
-                                "$friendName 添加你为好友",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            // 刷新好友列表
-                            loadFriends()
+                            webView.evaluateJavascript("window.onNewFriend('$friendName')", null)
+                            webAppBridge.loadFriends()
                         }
                     }
 
                     on(Socket.EVENT_DISCONNECT) {
                         runOnUiThread {
-                            stopSharingLocation()
-                            updateShareButtonState()
-                            Toast.makeText(this@MainActivity, "连接断开", Toast.LENGTH_SHORT).show()
+                            exitSharing()
+                            webView.evaluateJavascript("window.onShareState(false)", null)
                         }
                     }
 
@@ -555,14 +366,12 @@ class MainActivity : AppCompatActivity() {
             userLocationInfos.clear()
             isFirstLocation = true
             isFollowing = false
-            binding.btnFollow.isChecked = false
             isSharingLocation = false
-            selectedUserId = null
-            hideUserInfoPanel()
-            updateShareButtonState()
-            Toast.makeText(this, "已退出共享", Toast.LENGTH_SHORT).show()
+            webView.evaluateJavascript("window.onShareState(false)", null)
         }
     }
+
+    // ========== 位置共享 ==========
 
     private fun startSharingLocation() {
         if (socket == null || socket?.connected() != true) {
@@ -580,7 +389,6 @@ class MainActivity : AppCompatActivity() {
                 val bearing = location.bearing
                 myLocation = LatLng(lat, lng)
 
-                // 保存自己的速度和方向
                 val info = userLocationInfos.getOrPut(userId) { UserLocationInfo() }
                 info.speed = speed
                 info.bearing = bearing
@@ -611,8 +419,9 @@ class MainActivity : AppCompatActivity() {
         locationClient?.stopLocation()
     }
 
+    // ========== 地图标记 ==========
+
     private fun updateMyMarker(lat: Double, lng: Double, speed: Float = 0f, bearing: Float = 0f) {
-        android.util.Log.d("LocationShare", "updateMyMarker: lat=$lat, lng=$lng, speed=$speed, bearing=$bearing, userId=$userId")
         val latLng = LatLng(lat, lng)
         myLocation = latLng
 
@@ -628,35 +437,21 @@ class MainActivity : AppCompatActivity() {
         val icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
 
         if (marker != null) {
-            android.util.Log.d("LocationShare", "Updating existing marker for me")
             marker.position = latLng
             marker.title = displayName
         } else {
-            android.util.Log.d("LocationShare", "Creating new green marker for me: $displayName")
             val newMarker = aMap?.addMarker(MarkerOptions()
                 .position(latLng)
                 .title(displayName)
                 .icon(icon)
                 .visible(true)
             )
-            newMarker?.let {
-                userMarkers[userId] = it
-                android.util.Log.d("LocationShare", "Marker created and saved, total markers: ${userMarkers.size}")
-            } ?: android.util.Log.e("LocationShare", "Failed to create marker - aMap is null?")
-        }
-
-        // 如果当前正在显示自己的信息，更新面板
-        if (selectedUserId == userId) {
-            runOnUiThread {
-                binding.tvSpeed.text = String.format("%.1f km/h", speed * 3.6f)
-                binding.tvDirection.text = bearingToDirection(bearing)
-            }
+            newMarker?.let { userMarkers[userId] = it }
         }
     }
 
     private fun updateUserLocationOnMap(data: JSONObject) {
         val id = data.optString("userId")
-        android.util.Log.d("LocationShare", "updateUserLocationOnMap: userId=$id, myId=$userId")
         if (id == userId) return
 
         val lat = data.optDouble("lat")
@@ -664,10 +459,8 @@ class MainActivity : AppCompatActivity() {
         val name = data.optString("userName", "未知用户")
         val speed = data.optDouble("speed", 0.0).toFloat()
         val bearing = data.optDouble("bearing", 0.0).toFloat()
-        android.util.Log.d("LocationShare", "Other user location: $name at ($lat, $lng), speed=$speed, bearing=$bearing")
         val latLng = LatLng(lat, lng)
 
-        // 保存其他用户的速度和方向
         val info = userLocationInfos.getOrPut(id) { UserLocationInfo() }
         info.speed = speed
         info.bearing = bearing
@@ -677,30 +470,22 @@ class MainActivity : AppCompatActivity() {
         val icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
 
         if (marker != null) {
-            android.util.Log.d("LocationShare", "Updating existing marker for $name")
             marker.position = latLng
             marker.title = name
         } else {
-            android.util.Log.d("LocationShare", "Creating new red marker for $name")
             val newMarker = aMap?.addMarker(MarkerOptions()
                 .position(latLng)
                 .title(name)
                 .icon(icon)
                 .visible(true)
             )
-            newMarker?.let {
-                userMarkers[id] = it
-                android.util.Log.d("LocationShare", "Red marker created, total markers: ${userMarkers.size}")
-            } ?: android.util.Log.e("LocationShare", "Failed to create red marker - aMap is null?")
+            newMarker?.let { userMarkers[id] = it }
         }
 
-        // 如果当前正在显示该用户的信息，更新面板
-        if (selectedUserId == id) {
-            runOnUiThread {
-                binding.tvSpeed.text = String.format("%.1f km/h", speed * 3.6f)
-                binding.tvDirection.text = bearingToDirection(bearing)
-            }
-        }
+        webView.evaluateJavascript(
+            "window.onLocationUpdate('$id', $lat, $lng, '${name.replace("'", "\\'")}')",
+            null
+        )
     }
 
     private fun removeUserMarker(userId: String) {
@@ -755,7 +540,6 @@ class MainActivity : AppCompatActivity() {
                     isNeedAddress = false
                 })
             }
-            // 不使用高德地图自带的蓝点，只使用我们自己的标记
             aMap?.isMyLocationEnabled = false
         } catch (e: Exception) {
             e.printStackTrace()
@@ -813,5 +597,14 @@ class MainActivity : AppCompatActivity() {
         mapView?.onDestroy()
         socket?.disconnect()
         socket?.off()
+        webView.destroy()
+    }
+
+    override fun onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
     }
 }

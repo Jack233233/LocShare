@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色调 - 暖阳系 -->
+    <color name="primary_orange">#FF8A65</color>
+    <color name="primary_orange_dark">#F4511E</color>
+    <color name="primary_orange_light">#FFAB91</color>
+
+    <!-- 辅助色 -->
+    <color name="secondary_pink">#F48FB1</color>
+    <color name="secondary_teal">#4DB6AC</color>
+    <color name="secondary_purple">#9575CD</color>
+
+    <!-- 渐变色 -->
+    <color name="gradient_orange_start">#FF8A65</color>
+    <color name="gradient_orange_end">#FF7043</color>
+    <color name="gradient_sunset_start">#FF8A65</color>
+    <color name="gradient_sunset_end">#F48FB1</color>
+    <color name="gradient_teal_start">#4DB6AC</color>
+    <color name="gradient_teal_end">#80CBC4</color>
+
+    <!-- 背景色 -->
+    <color name="bg_warm_white">#FFF8F5</color>
+    <color name="bg_cream">#FFF3E0</color>
+    <color name="bg_dark">#1A1A2E</color>
+    <color name="bg_card">#FFFFFF</color>
+    <color name="bg_card_dark">#2D2D44</color>
+
+    <!-- 文字色 -->
+    <color name="text_primary">#2C3E50</color>
+    <color name="text_secondary">#5D6D7E</color>
+    <color name="text_hint">#95A5A6</color>
+    <color name="text_white">#FFFFFF</color>
+    <color name="text_on_dark">#E8E8E8</color>
+
+    <!-- 功能色 -->
+    <color name="status_online">#66BB6A</color>
+    <color name="status_away">#FFA726</color>
+    <color name="status_offline">#BDBDBD</color>
+    <color name="error">#EF5350</color>
+    <color name="success">#66BB6A</color>
+    <color name="warning">#FFA726</color>
+
+    <!-- 分割线 -->
+    <color name="divider">#ECEFF1</color>
+    <color name="divider_dark">#37474F</color>
+
+    <!-- 透明色 -->
+    <color name="transparent">#00000000</color>
+    <color name="scrim">#99000000</color>
+</resources>

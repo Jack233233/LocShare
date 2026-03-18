@@ -19,9 +19,11 @@
 
     <application
         android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar"
+        android:theme="@style/Theme.Together"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
 
@@ -46,7 +48,7 @@
             android:name=".WelcomeActivity"
             android:exported="true"
             android:noHistory="true"
-            android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+            android:theme="@style/Theme.Together.Fullscreen">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -56,19 +58,20 @@
         <activity
             android:name=".MainActivity"
             android:exported="false"
-            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+            android:theme="@style/Theme.Together.Immersive"
+            android:hardwareAccelerated="true" />
 
         <activity
             android:name=".RouteManagerActivity"
             android:label="路线管理"
             android:parentActivityName=".MainActivity"
-            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+            android:theme="@style/Theme.Together" />
 
         <activity
             android:name=".ProfileActivity"
             android:label="个人中心"
             android:parentActivityName=".MainActivity"
-            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+            android:theme="@style/Theme.Together" />
     </application>
 
 </manifest>

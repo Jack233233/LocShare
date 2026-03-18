@@ -1,138 +1,163 @@
-// 前端逻辑
-let currentMode = 'none';
-let isSharing = false;
-let selectedFriend = null;
-let friends = [];
+// ========== 状态管理 ==========
+const state = {
+    currentMode: 'none', // 'none', 'pair', 'multi'
+    isSharing: false,
+    isSheetExpanded: false,
+    selectedFriend: null,
+    friends: [],
+    userInfo: null
+};
 
-// 页面切换
-function enterPairMode() {
-    console.log('enterPairMode called');
-    currentMode = 'pair';
+// ========== 初始化 ==========
+document.addEventListener('DOMContentLoaded', () => {
+    initUserInfo();
+    initEventListeners();
+});
 
-    // 隐藏主菜单，显示好友模式
-    document.getElementById('main-menu').classList.remove('active');
-    document.getElementById('pair-mode').classList.add('active');
+function initUserInfo() {
+    if (window.AndroidBridge) {
+        const info = JSON.parse(AndroidBridge.getUserInfo());
+        state.userInfo = info;
+    }
+}
 
-    // 显示地图容器
-    const mapContainer = document.getElementById('map-container');
-    mapContainer.classList.remove('hidden');
-    mapContainer.classList.add('visible');
+function initEventListeners() {
+    // 房间号输入监听
+    const roomInput = document.getElementById('room-id-input');
+    if (roomInput) {
+        roomInput.addEventListener('input', updateShareButtonState);
+    }
 
-    console.log('pair-mode active:', document.getElementById('pair-mode').classList.contains('active'));
+    // 配对码输入限制
+    const codeInput = document.getElementById('code-input');
+    if (codeInput) {
+        codeInput.addEventListener('input', (e) => {
+            if (e.target.value.length > 6) {
+                e.target.value = e.target.value.slice(0, 6);
+            }
+        });
+    }
+}
 
-    // 加载保存的用户名
-    const savedName = localStorage.getItem('userName') || '';
-    document.getElementById('userName').value = savedName;
+// ========== 底部抽屉控制（由原生 BottomSheetBehavior 驱动）==========
 
-    // 加载好友列表
+// 原生回调：抽屉状态变化
+window.onSheetStateChanged = function(stateStr) {
+    state.isSheetExpanded = (stateStr === 'expanded');
+    updateSheetUI();
+};
+
+// 原生回调：抽屉滑动中（用于视差效果）
+window.onSheetSliding = function(offset) {
+    // offset: 0 (折叠) ~ 1 (展开)
+    // 可以在这里添加视差动画效果
+    const hint = document.getElementById('sheet-hint');
+    if (hint) {
+        if (offset > 0.5) {
+            hint.textContent = '👇 下滑关闭';
+        } else {
+            hint.textContent = '👆 上滑展开';
+        }
+    }
+};
+
+function updateSheetUI() {
+    const sheet = document.getElementById('bottom-sheet');
+    const hint = document.getElementById('sheet-hint');
+
+    if (state.isSheetExpanded) {
+        sheet.classList.add('expanded');
+        sheet.classList.remove('collapsed');
+        if (hint) hint.textContent = '👇 下滑关闭';
+    } else {
+        sheet.classList.remove('expanded');
+        sheet.classList.add('collapsed');
+        if (hint) hint.textContent = '👆 上滑展开';
+    }
+}
+
+// 点击手柄切换状态
+function toggleSheet() {
+    if (window.AndroidBridge) {
+        if (state.isSheetExpanded) {
+            AndroidBridge.collapseSheet();
+        } else {
+            AndroidBridge.expandSheet();
+        }
+    }
+}
+
+// ========== 模式切换 ==========
+function showPairMode() {
+    state.currentMode = 'pair';
+    document.getElementById('pair-panel').classList.remove('hidden');
+    document.getElementById('multi-panel').classList.add('hidden');
     loadFriends();
+    updateShareButtonState();
+}
 
-    // 通知原生显示地图
+function showMultiMode() {
+    state.currentMode = 'multi';
+    document.getElementById('pair-panel').classList.add('hidden');
+    document.getElementById('multi-panel').classList.remove('hidden');
+    updateShareButtonState();
+}
+
+function showRoutes() {
     if (window.AndroidBridge) {
-        AndroidBridge.showMap();
+        AndroidBridge.showRouteManager();
     }
 }
 
-function enterMultiMode() {
-    currentMode = 'multi';
-    document.getElementById('main-menu').classList.remove('active');
-    document.getElementById('multi-mode').classList.add('active');
-
-    // 显示地图容器
-    const mapContainer = document.getElementById('map-container');
-    mapContainer.classList.remove('hidden');
-    mapContainer.classList.add('visible');
-
-    const savedName = localStorage.getItem('userName') || '';
-    document.getElementById('multiUserName').value = savedName;
-
+function showProfile() {
     if (window.AndroidBridge) {
-        AndroidBridge.showMap();
+        AndroidBridge.showProfile();
     }
 }
 
-function backToMenu() {
-    currentMode = 'none';
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById('main-menu').classList.add('active');
-
-    // 隐藏地图容器
-    const mapContainer = document.getElementById('map-container');
-    mapContainer.classList.add('hidden');
-    mapContainer.classList.remove('visible');
-
-    if (window.AndroidBridge) {
-        AndroidBridge.hideMap();
-    }
-}
-
-// 生成配对码
+// ========== 配对码 ==========
 function generatePairCode() {
-    const userName = document.getElementById('userName').value.trim();
+    const userName = state.userInfo?.userName || '';
     if (!userName) {
-        showToast('请先输入你的名字');
+        showToast('请先设置昵称');
         return;
     }
-
-    localStorage.setItem('userName', userName);
 
     if (window.AndroidBridge) {
         AndroidBridge.generatePairCode(userName);
     }
 }
 
-// 显示配对码
-function showPairCode(code) {
-    const display = document.getElementById('pair-code-display');
-    display.querySelector('.code').textContent = code;
-    display.classList.remove('hidden');
-
-    // 5分钟后隐藏
-    setTimeout(() => {
-        display.classList.add('hidden');
-    }, 300000);
-}
-
-// 输入配对码
 function showInputCode() {
-    const userName = document.getElementById('userName').value.trim();
-    if (!userName) {
-        showToast('请先输入你的名字');
-        return;
-    }
-
-    localStorage.setItem('userName', userName);
-    document.getElementById('input-code-modal').classList.remove('hidden');
+    document.getElementById('code-modal').classList.remove('hidden');
+    setTimeout(() => {
+        document.getElementById('code-input').focus();
+    }, 100);
 }
 
-function hideModal() {
-    document.getElementById('input-code-modal').classList.add('hidden');
-    document.getElementById('input-code').value = '';
+function hideCodeModal() {
+    document.getElementById('code-modal').classList.add('hidden');
+    document.getElementById('code-input').value = '';
 }
 
-function submitPairCode() {
-    const code = document.getElementById('input-code').value.trim();
+function submitCode() {
+    const code = document.getElementById('code-input').value.trim();
     if (code.length !== 6) {
         showToast('请输入6位配对码');
         return;
     }
 
-    const userName = document.getElementById('userName').value.trim();
-
+    const userName = state.userInfo?.userName || '';
     if (window.AndroidBridge) {
         AndroidBridge.pairWithCode(code, userName);
     }
-
-    hideModal();
+    hideCodeModal();
 }
 
-// 好友列表
+// ========== 好友列表 ==========
 function toggleFriends() {
-    const list = document.getElementById('friends-list');
-    const icon = document.getElementById('expand-icon');
-
-    list.classList.toggle('collapsed');
-    icon.textContent = list.classList.contains('collapsed') ? '▶' : '▼';
+    const section = document.querySelector('.friends-section');
+    section.classList.toggle('collapsed');
 }
 
 function loadFriends() {
@@ -141,43 +166,15 @@ function loadFriends() {
     }
 }
 
-function updateFriendsList(friendsData) {
-    friends = friendsData;
-    const container = document.getElementById('friends-list');
-    const countEl = document.getElementById('friend-count');
-
-    countEl.textContent = `(${friends.length})`;
-
-    if (friends.length === 0) {
-        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">暂无好友，生成配对码添加</div>';
-        return;
-    }
-
-    container.innerHTML = friends.map(f => `
-        <div class="friend-item ${selectedFriend === f.friendId ? 'selected' : ''}"
-             onclick="selectFriend('${f.friendId}')"
-             data-id="${f.friendId}">
-            <div class="friend-avatar">${f.friendName.charAt(0)}</div>
-            <div class="friend-info">
-                <div class="friend-name">${f.friendName}</div>
-                <div class="friend-status">点击开始共享</div>
-            </div>
-            <div class="friend-delete" onclick="event.stopPropagation(); deleteFriend('${f.friendId}')">删除</div>
-        </div>
-    `).join('');
-
-    updateShareButton();
-}
-
 function selectFriend(friendId) {
-    selectedFriend = friendId;
+    state.selectedFriend = state.friends.find(f => f.friendId === friendId);
 
-    // 更新UI
+    // 更新UI选中状态
     document.querySelectorAll('.friend-item').forEach(el => {
         el.classList.toggle('selected', el.dataset.id === friendId);
     });
 
-    updateShareButton();
+    updateShareButtonState();
 }
 
 function deleteFriend(friendId) {
@@ -188,19 +185,9 @@ function deleteFriend(friendId) {
     }
 }
 
-function updateShareButton() {
-    const btn = document.getElementById('btn-share');
-    if (currentMode === 'pair') {
-        btn.disabled = !selectedFriend;
-    } else if (currentMode === 'multi') {
-        const roomId = document.getElementById('roomId').value.trim();
-        btn.disabled = !roomId;
-    }
-}
-
-// 共享控制
+// ========== 共享控制 ==========
 function toggleSharing() {
-    if (isSharing) {
+    if (state.isSharing) {
         stopSharing();
     } else {
         startSharing();
@@ -208,39 +195,25 @@ function toggleSharing() {
 }
 
 function startSharing() {
-    const userName = document.getElementById('userName').value.trim();
+    const userName = state.userInfo?.userName || '';
     if (!userName) {
-        showToast('请先输入你的名字');
+        showToast('请先设置昵称');
         return;
     }
 
-    localStorage.setItem('userName', userName);
-
-    if (currentMode === 'pair' && selectedFriend) {
-        const friend = friends.find(f => f.friendId === selectedFriend);
-        if (friend && window.AndroidBridge) {
-            AndroidBridge.startPairSharing(userName, friend.pairRoomId);
+    if (state.currentMode === 'pair' && state.selectedFriend) {
+        if (window.AndroidBridge) {
+            AndroidBridge.startPairSharing(userName, state.selectedFriend.pairRoomId);
         }
-    }
-}
-
-function startMultiSharing() {
-    const userName = document.getElementById('multiUserName').value.trim();
-    const roomId = document.getElementById('roomId').value.trim();
-
-    if (!userName) {
-        showToast('请先输入你的名字');
-        return;
-    }
-    if (!roomId) {
-        showToast('请输入房间号');
-        return;
-    }
-
-    localStorage.setItem('userName', userName);
-
-    if (window.AndroidBridge) {
-        AndroidBridge.startMultiSharing(userName, roomId);
+    } else if (state.currentMode === 'multi') {
+        const roomId = document.getElementById('room-id-input').value.trim();
+        if (!roomId) {
+            showToast('请输入房间号');
+            return;
+        }
+        if (window.AndroidBridge) {
+            AndroidBridge.startMultiSharing(userName, roomId);
+        }
     }
 }
 
@@ -250,59 +223,97 @@ function stopSharing() {
     }
 }
 
-function onSharingStarted() {
-    isSharing = true;
+function updateShareButtonState() {
+    const btn = document.getElementById('btn-share');
 
-    if (currentMode === 'pair') {
-        document.getElementById('btn-share').classList.add('hidden');
-        document.getElementById('btn-stop').classList.remove('hidden');
-    } else {
-        document.getElementById('btn-multi-share').classList.add('hidden');
-        document.getElementById('btn-multi-stop').classList.remove('hidden');
+    if (state.isSharing) {
+        btn.textContent = '停止共享';
+        btn.classList.add('stopping');
+        btn.disabled = false;
+        return;
     }
-}
 
-function onSharingStopped() {
-    isSharing = false;
+    btn.textContent = '开始共享';
+    btn.classList.remove('stopping');
 
-    document.getElementById('btn-share').classList.remove('hidden');
-    document.getElementById('btn-stop').classList.add('hidden');
-    document.getElementById('btn-multi-share').classList.remove('hidden');
-    document.getElementById('btn-multi-stop').classList.add('hidden');
-}
-
-// 地图跟随
-function toggleFollow() {
-    if (window.AndroidBridge) {
-        AndroidBridge.toggleFollow();
+    let canStart = false;
+    if (state.currentMode === 'pair') {
+        canStart = state.selectedFriend !== null;
+    } else if (state.currentMode === 'multi') {
+        const roomId = document.getElementById('room-id-input')?.value.trim();
+        canStart = !!roomId;
     }
+
+    btn.disabled = !canStart;
 }
 
-// Toast提示
+// ========== Toast 提示 ==========
 function showToast(message) {
     const toast = document.getElementById('toast');
     toast.textContent = message;
-    toast.classList.remove('hidden');
+    toast.classList.add('show');
 
     setTimeout(() => {
-        toast.classList.add('hidden');
-    }, 3000);
+        toast.classList.remove('show');
+    }, 2500);
 }
 
-// 监听输入变化
-document.getElementById('roomId')?.addEventListener('input', updateShareButton);
+// ========== 原生回调接口 ==========
 
-// 原生回调接口
+// 配对码生成回调
 window.onPairCodeGenerated = function(code) {
-    showPairCode(code);
+    document.getElementById('pair-code').textContent = code;
+    document.getElementById('pair-code-display').classList.remove('hidden');
     showToast('配对码已生成');
+
+    // 5分钟后隐藏
+    setTimeout(() => {
+        document.getElementById('pair-code-display').classList.add('hidden');
+    }, 300000);
 };
 
+// 好友列表加载回调
 window.onFriendsLoaded = function(friendsJson) {
-    const friendsData = JSON.parse(friendsJson);
-    updateFriendsList(friendsData);
+    try {
+        state.friends = JSON.parse(friendsJson);
+        renderFriendsList();
+    } catch (e) {
+        console.error('Failed to parse friends:', e);
+    }
 };
 
+function renderFriendsList() {
+    const container = document.getElementById('friends-list');
+    const countEl = document.getElementById('friend-count');
+
+    countEl.textContent = `(${state.friends.length})`;
+
+    if (state.friends.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">💫</div>
+                <div class="empty-text">暂无好友</div>
+                <div class="empty-hint">生成配对码添加第一个重要的人</div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = state.friends.map(f => `
+        <div class="friend-item ${state.selectedFriend?.friendId === f.friendId ? 'selected' : ''}"
+             onclick="selectFriend('${f.friendId}')"
+             data-id="${f.friendId}">
+            <div class="friend-avatar">${f.friendName.charAt(0)}</div>
+            <div class="friend-info">
+                <div class="friend-name">${f.friendName}</div>
+                <div class="friend-status">点击开始共享</div>
+            </div>
+            <div class="friend-delete" onclick="event.stopPropagation(); deleteFriend('${f.friendId}')">删除</div>
+        </div>
+    `).join('');
+}
+
+// 添加好友回调
 window.onFriendAdded = function(success, message) {
     showToast(message);
     if (success) {
@@ -310,25 +321,34 @@ window.onFriendAdded = function(success, message) {
     }
 };
 
+// 共享状态变化回调
 window.onSharingStateChanged = function(sharing) {
-    if (sharing) {
-        onSharingStarted();
-    } else {
-        onSharingStopped();
-    }
+    state.isSharing = sharing;
+    updateShareButtonState();
 };
 
+// 用户加入回调
+window.onUserJoined = function(userName) {
+    showToast(`${userName} 加入了共享`);
+};
+
+// 用户离开回调
+window.onUserLeft = function(userId) {
+    console.log('User left:', userId);
+};
+
+// 新好友回调
+window.onNewFriend = function(friendName) {
+    showToast(`${friendName} 添加你为好友`);
+    loadFriends();
+};
+
+// 位置更新回调
 window.onLocationUpdate = function(userId, lat, lng, name) {
-    // 可以在这里更新前端显示的位置信息
     console.log('Location update:', userId, lat, lng, name);
 };
 
-// 初始化
-window.onload = function() {
-    // 检查是否有保存的用户名
-    const savedName = localStorage.getItem('userName');
-    if (savedName) {
-        document.getElementById('userName').value = savedName;
-        document.getElementById('multiUserName').value = savedName;
-    }
+// 标记点击回调
+window.onMarkerClicked = function(userId, userName) {
+    console.log('Marker clicked:', userId, userName);
 };
