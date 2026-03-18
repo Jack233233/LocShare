@@ -35,7 +35,6 @@
             padding: 12px 16px;
             overflow-x: auto;
         }
-        /* 抽屉内容区域 */
         #sheet-content {
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
@@ -53,10 +52,7 @@
             cursor: pointer;
             transition: transform 0.15s, background 0.15s;
         }
-        .action-chip:active {
-            transform: scale(0.92);
-            background: #FFEDE5;
-        }
+        .action-chip:active { transform: scale(0.92); background: #FFEDE5; }
         .chip-icon { font-size: 24px; }
         .chip-text { font-size: 12px; color: #666; }
         .panel { padding: 16px; }
@@ -80,17 +76,10 @@
             cursor: pointer;
             transition: transform 0.15s, box-shadow 0.15s;
         }
-        .btn:active:not(:disabled) {
-            transform: scale(0.96);
-            box-shadow: 0 4px 12px rgba(255, 138, 101, 0.4);
-        }
-        .btn:disabled {
-            background: #E0E0E0;
-            cursor: not-allowed;
-        }
-        .input-group {
-            margin: 12px 0;
-        }
+        .btn:active:not(:disabled) { transform: scale(0.96); box-shadow: 0 4px 12px rgba(255, 138, 101, 0.4); }
+        .btn:disabled { background: #E0E0E0; cursor: not-allowed; }
+        .btn.stopping { background: linear-gradient(135deg, #FF6B6B, #FF8E8E); }
+        .input-group { margin: 12px 0; }
         .input-group input {
             width: 100%;
             padding: 14px;
@@ -99,10 +88,7 @@
             font-size: 14px;
             transition: border-color 0.2s;
         }
-        .input-group input:focus {
-            outline: none;
-            border-color: #FF8A65;
-        }
+        .input-group input:focus { outline: none; border-color: #FF8A65; }
         .friend-item {
             padding: 14px 16px;
             border-bottom: 1px solid #eee;
@@ -112,9 +98,8 @@
             gap: 12px;
             transition: background 0.15s;
         }
-        .friend-item:active {
-            background: #FFF5F2;
-        }
+        .friend-item:active { background: #FFF5F2; }
+        .friend-selected { background: #FFF5F2; border-left: 3px solid #FF8A65; }
         .friend-avatar {
             width: 40px;
             height: 40px;
@@ -126,18 +111,8 @@
             color: white;
             font-weight: 600;
         }
-        .friend-name {
-            font-weight: 600;
-            color: #2C3E50;
-        }
-        .friend-status {
-            font-size: 12px;
-            color: #999;
-        }
-        .friend-selected {
-            background: #FFF5F2;
-            border-left: 3px solid #FF8A65;
-        }
+        .friend-name { font-weight: 600; color: #2C3E50; }
+        .friend-status { font-size: 12px; color: #999; }
         /* 地图信息窗口 */
         .map-info-window {
             position: fixed;
@@ -159,12 +134,7 @@
             pointer-events: auto;
             transform: translate(-50%, -50%) scale(1);
         }
-        .info-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
+        .info-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
         .info-avatar {
             width: 48px;
             height: 48px;
@@ -177,37 +147,12 @@
             font-size: 20px;
             font-weight: 600;
         }
-        .info-name {
-            font-size: 18px;
-            font-weight: 700;
-            color: #2C3E50;
-        }
-        .info-status {
-            font-size: 12px;
-            color: #999;
-            margin-top: 2px;
-        }
-        .info-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-        .stat-item {
-            background: #F8F9FA;
-            border-radius: 12px;
-            padding: 12px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 20px;
-            font-weight: 700;
-            color: #FF8A65;
-            margin-bottom: 4px;
-        }
-        .stat-label {
-            font-size: 11px;
-            color: #999;
-        }
+        .info-name { font-size: 18px; font-weight: 700; color: #2C3E50; }
+        .info-status { font-size: 12px; color: #999; margin-top: 2px; }
+        .info-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .stat-item { background: #F8F9FA; border-radius: 12px; padding: 12px; text-align: center; }
+        .stat-value { font-size: 20px; font-weight: 700; color: #FF8A65; margin-bottom: 4px; }
+        .stat-label { font-size: 11px; color: #999; }
         .info-close {
             position: absolute;
             top: 12px;
@@ -224,9 +169,7 @@
             align-items: center;
             justify-content: center;
         }
-        .info-close:active {
-            background: #E0E0E0;
-        }
+        .info-close:active { background: #E0E0E0; }
         .info-backdrop {
             position: fixed;
             top: 0;
@@ -239,22 +182,10 @@
             pointer-events: none;
             transition: opacity 0.2s;
         }
-        .info-backdrop.show {
-            opacity: 1;
-            pointer-events: auto;
-        }
+        .info-backdrop.show { opacity: 1; pointer-events: auto; }
         /* 房间用户列表 */
-        .room-users {
-            margin-top: 16px;
-            border-top: 1px solid #f0f0f0;
-            padding-top: 16px;
-        }
-        .room-users-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #666;
-            margin-bottom: 12px;
-        }
+        .room-users { margin-top: 16px; border-top: 1px solid #f0f0f0; padding-top: 16px; }
+        .room-users-title { font-size: 14px; font-weight: 600; color: #666; margin-bottom: 12px; }
         .room-user-item {
             display: flex;
             align-items: center;
@@ -265,9 +196,7 @@
             cursor: pointer;
             transition: background 0.15s;
         }
-        .room-user-item:active {
-            background: #FFF5F2;
-        }
+        .room-user-item:active { background: #FFF5F2; }
         .room-user-avatar {
             width: 36px;
             height: 36px;
@@ -280,18 +209,67 @@
             font-weight: 600;
             margin-right: 12px;
         }
-        .room-user-name {
-            flex: 1;
-            font-size: 14px;
+        .room-user-name { flex: 1; font-size: 14px; color: #2C3E50; }
+        /* 切换面板遮罩 */
+        .mode-switch-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .mode-switch-overlay.show { opacity: 1; pointer-events: auto; }
+        .mode-switch-dialog {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            width: 80%;
+            max-width: 300px;
+            text-align: center;
+        }
+        .mode-switch-dialog h3 {
+            font-size: 16px;
+            font-weight: 700;
             color: #2C3E50;
+            margin-bottom: 12px;
         }
-        .room-user-self {
-            font-size: 11px;
-            color: #FF8A65;
-            background: #FFF5F2;
-            padding: 2px 8px;
-            border-radius: 10px;
+        .mode-switch-dialog p {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 20px;
         }
+        .mode-switch-dialog .btn-group {
+            display: flex;
+            gap: 12px;
+        }
+        .btn-secondary {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #E0E0E0;
+            border-radius: 12px;
+            background: white;
+            color: #666;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .btn-primary {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #FF8A65, #F48FB1);
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -319,6 +297,18 @@
         </div>
     </div>
 
+    <!-- 切换面板确认对话框 -->
+    <div class="mode-switch-overlay" id="mode-switch-overlay">
+        <div class="mode-switch-dialog">
+            <h3>正在共享位置</h3>
+            <p>切换模式需要先停止当前共享，是否停止？</p>
+            <div class="btn-group">
+                <button class="btn-secondary" onclick="hideModeSwitchDialog()">取消</button>
+                <button class="btn-primary" onclick="confirmStopAndSwitch()">停止并切换</button>
+            </div>
+        </div>
+    </div>
+
     <div class="sheet-handle" onclick="toggleSheet()">
         <div class="handle-bar"></div>
         <div id="hint">👆 点击展开</div>
@@ -326,11 +316,11 @@
 
     <div id="sheet-content">
         <div class="quick-actions">
-            <button class="action-chip" onclick="showPair()">
+            <button class="action-chip" onclick="trySwitchMode('pair')">
                 <span class="chip-icon">👥</span>
                 <span class="chip-text">好友</span>
             </button>
-            <button class="action-chip" onclick="showMulti()">
+            <button class="action-chip" onclick="trySwitchMode('multi')">
                 <span class="chip-icon">👨‍👩‍👧‍👦</span>
                 <span class="chip-text">多人</span>
             </button>
@@ -344,6 +334,7 @@
             </button>
         </div>
 
+        <!-- 好友面板 -->
         <div id="pair-panel" class="panel">
             <div class="panel-title">好友共享</div>
             <button class="btn" onclick="generateCode()">生成配对码</button>
@@ -353,84 +344,95 @@
                 <div style="font-size: 12px; color: #999; margin-top: 8px;">告诉对方输入此配对码</div>
             </div>
             <div id="friends-list" style="margin-top: 12px; border-top: 1px solid #f0f0f0;"></div>
+            <button class="btn" id="pair-share-btn" onclick="togglePairShare()" disabled>开始共享</button>
         </div>
 
+        <!-- 多人面板 -->
         <div id="multi-panel" class="panel hidden">
             <div class="panel-title">多人共享</div>
             <div class="input-group">
-                <input type="text" id="room-id" placeholder="房间号" oninput="updateBtn()">
+                <input type="text" id="room-id" placeholder="房间号" oninput="updateMultiBtn()">
             </div>
             <div class="input-group">
-                <input type="text" id="user-name" placeholder="你的名字" oninput="updateBtn()">
+                <input type="text" id="user-name" placeholder="你的名字" oninput="updateMultiBtn()">
             </div>
             <div id="room-users-list" class="room-users hidden">
                 <div class="room-users-title">房间成员</div>
                 <div id="room-users-container"></div>
             </div>
-        </div>
-
-        <div class="panel">
-            <button class="btn" id="share-btn" onclick="toggleShare()" disabled>开始共享</button>
+            <button class="btn" id="multi-share-btn" onclick="toggleMultiShare()" disabled>开始共享</button>
         </div>
     </div>
 
     <script>
-        let currentMode = 'none';
+        // 全局状态
+        let currentMode = 'none'; // 'pair' | 'multi' | 'none'
         let isSharing = false;
         let selectedFriend = null;
         let isExpanded = false;
-        let roomUsers = new Map(); // 存储房间内用户信息 {userId: {name, lat, lng, speed, bearing}}
+        let roomUsers = new Map();
+        let pendingMode = null;
 
+        // ========== 抽屉控制 ==========
         function toggleSheet() {
-            if (window.AndroidBridge) {
-                AndroidBridge.toggleSheet();
-            }
+            if (window.AndroidBridge) AndroidBridge.toggleSheet();
         }
 
         window.onSheetState = function(state) {
             isExpanded = (state === 'expanded');
             document.getElementById('hint').textContent = isExpanded ? '👇 点击收起' : '👆 点击展开';
-
-            // 根据展开状态设置样式
-            const body = document.body;
-            if (isExpanded) {
-                body.classList.remove('sheet-collapsed');
-            } else {
-                body.classList.add('sheet-collapsed');
-            }
         };
 
-        function showPair() {
-            currentMode = 'pair';
-            document.getElementById('pair-panel').classList.remove('hidden');
-            document.getElementById('multi-panel').classList.add('hidden');
-            updateBtn();
-            loadFriends();
+        // ========== 模式切换（带停止确认） ==========
+        function trySwitchMode(mode) {
+            if (isSharing && currentMode !== mode) {
+                // 正在共享，需要确认停止
+                pendingMode = mode;
+                showModeSwitchDialog();
+                return;
+            }
+            // 未共享或切换到相同模式，直接切换
+            switchToMode(mode);
         }
 
-        function showMulti() {
-            currentMode = 'multi';
-            document.getElementById('pair-panel').classList.add('hidden');
-            document.getElementById('multi-panel').classList.remove('hidden');
-            updateBtn();
+        function switchToMode(mode) {
+            currentMode = mode;
+            if (mode === 'pair') {
+                document.getElementById('pair-panel').classList.remove('hidden');
+                document.getElementById('multi-panel').classList.add('hidden');
+                loadFriends();
+            } else if (mode === 'multi') {
+                document.getElementById('pair-panel').classList.add('hidden');
+                document.getElementById('multi-panel').classList.remove('hidden');
+            }
         }
 
-        function showRoutes() {
-            if (window.AndroidBridge) AndroidBridge.showRouteManager();
+        function showModeSwitchDialog() {
+            document.getElementById('mode-switch-overlay').classList.add('show');
         }
 
-        function showProfile() {
-            if (window.AndroidBridge) AndroidBridge.showProfile();
+        function hideModeSwitchDialog() {
+            document.getElementById('mode-switch-overlay').classList.remove('show');
+            pendingMode = null;
         }
 
+        function confirmStopAndSwitch() {
+            // 停止共享
+            if (window.AndroidBridge) AndroidBridge.stopSharing();
+            hideModeSwitchDialog();
+            // 等待停止完成后再切换
+            setTimeout(() => {
+                if (pendingMode) {
+                    switchToMode(pendingMode);
+                    pendingMode = null;
+                }
+            }, 300);
+        }
+
+        // ========== 好友模式 ==========
         function generateCode() {
             if (window.AndroidBridge) AndroidBridge.generatePairCode('');
         }
-
-        window.onPairCode = function(code) {
-            document.getElementById('code').textContent = code;
-            document.getElementById('code-display').classList.remove('hidden');
-        };
 
         function showPairDialog() {
             const code = prompt('输入6位配对码');
@@ -459,83 +461,77 @@
                     </div>
                 `).join('');
             }
+            updatePairBtn();
         };
 
         function selectFriend(id, roomId, name) {
             selectedFriend = { friendId: id, pairRoomId: roomId, friendName: name };
-            // 更新选中样式
-            document.querySelectorAll('.friend-item').forEach(el => {
-                el.classList.remove('friend-selected');
-            });
+            document.querySelectorAll('.friend-item').forEach(el => el.classList.remove('friend-selected'));
             event.currentTarget.classList.add('friend-selected');
-            updateBtn();
+            updatePairBtn();
         }
 
-        function toggleShare() {
-            if (isSharing) {
-                if (window.AndroidBridge) AndroidBridge.stopSharing();
-            } else {
-                const name = document.getElementById('user-name')?.value || '';
-                if (currentMode === 'pair' && selectedFriend) {
-                    if (window.AndroidBridge) AndroidBridge.startPairSharing(name, selectedFriend.pairRoomId);
-                } else if (currentMode === 'multi') {
-                    const roomId = document.getElementById('room-id').value;
-                    if (roomId && window.AndroidBridge) AndroidBridge.startMultiSharing(name, roomId);
-                }
-            }
-        }
-
-        function updateBtn() {
-            const btn = document.getElementById('share-btn');
-            btn.textContent = isSharing ? '停止共享' : '开始共享';
-            btn.style.background = isSharing ? '#FF6B6B' : '';
-
-            let canStart = false;
-            if (currentMode === 'pair' && selectedFriend) canStart = true;
-            if (currentMode === 'multi' && document.getElementById('room-id')?.value && document.getElementById('user-name')?.value) canStart = true;
-
-            btn.disabled = !isSharing && !canStart;
-        }
-
-        window.onShareState = function(sharing) {
-            isSharing = sharing;
-            updateBtn();
-        };
-
-        window.onUserJoin = function(name) {
-            // 可以显示toast提示
+        window.onPairCode = function(code) {
+            document.getElementById('code').textContent = code;
+            document.getElementById('code-display').classList.remove('hidden');
         };
 
         window.onNewFriend = function(name) {
             loadFriends();
         };
 
-        // 地图标记点击 - 显示信息窗口
-        window.onMarkerClicked = function(id, name, speed, bearing) {
-            document.getElementById('info-avatar').textContent = name.charAt(0);
-            document.getElementById('info-name').textContent = name;
-
-            // 速度 (m/s 转换为 km/h)
-            const speedKmh = Math.round(speed * 3.6);
-            document.getElementById('info-speed').textContent = speedKmh;
-
-            // 方向
-            const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
-            const index = Math.round(bearing / 45) % 8;
-            document.getElementById('info-bearing').textContent = directions[index] || '北';
-
-            document.getElementById('info-backdrop').classList.add('show');
-            document.getElementById('map-info-window').classList.add('show');
-        };
-
-        function closeInfoWindow() {
-            document.getElementById('info-backdrop').classList.remove('show');
-            document.getElementById('map-info-window').classList.remove('show');
+        function updatePairBtn() {
+            const btn = document.getElementById('pair-share-btn');
+            btn.textContent = isSharing && currentMode === 'pair' ? '停止共享' : '开始共享';
+            btn.classList.toggle('stopping', isSharing && currentMode === 'pair');
+            btn.disabled = !isSharing && !selectedFriend;
         }
 
-        // 接收位置更新并更新房间用户列表
+        function togglePairShare() {
+            if (isSharing) {
+                if (window.AndroidBridge) AndroidBridge.stopSharing();
+            } else if (selectedFriend) {
+                if (window.AndroidBridge) AndroidBridge.startPairSharing('', selectedFriend.pairRoomId);
+            }
+        }
+
+        // ========== 多人模式 ==========
+        function updateMultiBtn() {
+            const roomId = document.getElementById('room-id').value;
+            const userName = document.getElementById('user-name').value;
+            const btn = document.getElementById('multi-share-btn');
+
+            btn.textContent = isSharing && currentMode === 'multi' ? '停止共享' : '开始共享';
+            btn.classList.toggle('stopping', isSharing && currentMode === 'multi');
+            btn.disabled = !isSharing && !(roomId && userName);
+        }
+
+        function toggleMultiShare() {
+            if (isSharing) {
+                if (window.AndroidBridge) AndroidBridge.stopSharing();
+            } else {
+                const roomId = document.getElementById('room-id').value;
+                const userName = document.getElementById('user-name').value;
+                if (roomId && userName && window.AndroidBridge) {
+                    AndroidBridge.startMultiSharing(userName, roomId);
+                }
+            }
+        }
+
+        // ========== 共享状态回调 ==========
+        window.onShareState = function(sharing) {
+            isSharing = sharing;
+            updatePairBtn();
+            updateMultiBtn();
+            if (!isSharing) {
+                // 停止共享后清空房间用户列表
+                roomUsers.clear();
+                updateRoomUsersList();
+            }
+        };
+
+        // ========== 房间用户列表 ==========
         window.onLocationUpdate = function(userId, lat, lng, name, speed, bearing) {
-            // 保存用户位置信息
             roomUsers.set(userId, {
                 userId: userId,
                 name: name,
@@ -544,72 +540,80 @@
                 speed: speed || 0,
                 bearing: bearing || 0
             });
-
-            // 如果当前在多人模式，更新用户列表显示
             if (currentMode === 'multi' && isSharing) {
                 updateRoomUsersList();
             }
         };
 
-        // 更新房间用户列表UI
         function updateRoomUsersList() {
             const container = document.getElementById('room-users-container');
             const listWrapper = document.getElementById('room-users-list');
-
             if (roomUsers.size === 0) {
                 listWrapper.classList.add('hidden');
                 return;
             }
-
             listWrapper.classList.remove('hidden');
-            const myUserId = ''; // 自己的ID会在原生端过滤掉或标记
-
             let html = '';
             roomUsers.forEach((user, uid) => {
-                const isSelf = uid === 'self' || uid === ''; // 简单判断，实际需要用户ID
                 html += `
                     <div class="room-user-item" onclick="onRoomUserClick('${uid}')">
                         <div class="room-user-avatar">${user.name.charAt(0)}</div>
                         <div class="room-user-name">${user.name}</div>
-                        ${isSelf ? '<span class="room-user-self">我</span>' : ''}
                     </div>
                 `;
             });
             container.innerHTML = html;
         }
 
-        // 点击房间用户
         function onRoomUserClick(userId) {
             const user = roomUsers.get(userId);
             if (!user) return;
-
-            // 移动地图到该用户位置
-            if (window.AndroidBridge) {
-                AndroidBridge.moveToLocation(user.lat, user.lng);
-            }
-
-            // 显示信息窗口
-            document.getElementById('info-avatar').textContent = user.name.charAt(0);
-            document.getElementById('info-name').textContent = user.name;
-
-            const speedKmh = Math.round(user.speed * 3.6);
-            document.getElementById('info-speed').textContent = speedKmh;
-
-            const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
-            const index = Math.round(user.bearing / 45) % 8;
-            document.getElementById('info-bearing').textContent = directions[index] || '北';
-
-            document.getElementById('info-backdrop').classList.add('show');
-            document.getElementById('map-info-window').classList.add('show');
+            if (window.AndroidBridge) AndroidBridge.moveToLocation(user.lat, user.lng);
+            showInfoWindow(user.name, user.speed, user.bearing);
         }
 
-        // 用户离开房间
         window.onUserLeave = function(userId) {
             roomUsers.delete(userId);
             if (currentMode === 'multi' && isSharing) {
                 updateRoomUsersList();
             }
         };
+
+        window.onUserJoin = function(name) {
+            // 可以显示toast提示
+        };
+
+        // ========== 地图信息窗口 ==========
+        window.onMarkerClicked = function(id, name, speed, bearing) {
+            showInfoWindow(name, speed, bearing);
+        };
+
+        function showInfoWindow(name, speed, bearing) {
+            document.getElementById('info-avatar').textContent = name.charAt(0);
+            document.getElementById('info-name').textContent = name;
+            document.getElementById('info-speed').textContent = Math.round(speed * 3.6);
+            const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+            document.getElementById('info-bearing').textContent = directions[Math.round(bearing / 45) % 8] || '北';
+            document.getElementById('info-backdrop').classList.add('show');
+            document.getElementById('map-info-window').classList.add('show');
+        }
+
+        function closeInfoWindow() {
+            document.getElementById('info-backdrop').classList.remove('show');
+            document.getElementById('map-info-window').classList.remove('show');
+        }
+
+        // ========== 其他功能 ==========
+        function showRoutes() {
+            if (window.AndroidBridge) AndroidBridge.showRouteManager();
+        }
+
+        function showProfile() {
+            if (window.AndroidBridge) AndroidBridge.showProfile();
+        }
+
+        // 默认显示好友面板
+        switchToMode('pair');
     </script>
 </body>
 </html>
