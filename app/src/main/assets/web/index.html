@@ -339,12 +339,37 @@
             <div class="panel-title">好友共享</div>
             <button class="btn" onclick="generateCode()">生成配对码</button>
             <button class="btn" onclick="showPairDialog()">输入配对码</button>
-            <div id="code-display" class="hidden" style="text-align: center; padding: 20px; background: #FFF5F2; border-radius: 12px; margin: 12px 0;">
+            <div id="code-display" class="hidden" style="text-align: center; padding: 16px; background: #FFF5F2; border-radius: 12px; margin: 12px 0;">
                 <div id="code" style="font-size: 32px; font-weight: bold; color: #FF8A65; letter-spacing: 8px;">------</div>
-                <div style="font-size: 12px; color: #999; margin-top: 8px;">告诉对方输入此配对码</div>
+                <div style="font-size: 12px; color: #999; margin-top: 4px;">告诉对方输入此配对码</div>
+                <div style="font-size: 11px; color: #FF8A65; margin-top: 4px;" id="code-timer">5分钟后失效</div>
+                <button onclick="hidePairCode()" style="margin-top: 12px; padding: 8px 24px; border: 1px solid #FF8A65; border-radius: 16px; background: white; color: #FF8A65; font-size: 13px; cursor: pointer;">取消</button>
             </div>
             <div id="friends-list" style="margin-top: 12px; border-top: 1px solid #f0f0f0;"></div>
             <button class="btn" id="pair-share-btn" onclick="togglePairShare()" disabled>开始共享</button>
+        </div>
+
+        <!-- 路线模式面板 -->
+        <div id="route-panel" class="panel hidden">
+            <div class="panel-title">路线出行</div>
+            <div id="route-info" style="background: #FFF5F2; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+                <div style="font-size: 16px; font-weight: 700; color: #2C3E50; margin-bottom: 8px;" id="route-name">--</div>
+                <div style="font-size: 13px; color: #666;">终点: <span id="route-end">--</span></div>
+                <div style="margin-top: 12px; display: flex; gap: 16px;">
+                    <div>
+                        <div style="font-size: 24px; font-weight: 700; color: #FF8A65;" id="route-distance">--</div>
+                        <div style="font-size: 11px; color: #999;">剩余距离(米)</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 24px; font-weight: 700; color: #4DB6AC;" id="route-duration">--</div>
+                        <div style="font-size: 11px; color: #999;">已用时</div>
+                    </div>
+                </div>
+            </div>
+            <div id="route-nearby" class="hidden" style="background: #E8F5E9; border-radius: 12px; padding: 12px 16px; margin-bottom: 12px;">
+                <div style="font-size: 14px; color: #4CAF50; font-weight: 600;">🎉 即将到达终点!</div>
+            </div>
+            <button class="btn stopping" onclick="stopRouteSharing()">停止出行</button>
         </div>
 
         <!-- 多人面板 -->
@@ -471,13 +496,42 @@
             updatePairBtn();
         }
 
+        let pairCodeTimer = null;
+        let pairCodeExpireTime = null;
+
         window.onPairCode = function(code) {
             document.getElementById('code').textContent = code;
             document.getElementById('code-display').classList.remove('hidden');
+
+            // 设置5分钟后自动隐藏
+            pairCodeExpireTime = Date.now() + 5 * 60 * 1000;
+
+            if (pairCodeTimer) clearInterval(pairCodeTimer);
+            pairCodeTimer = setInterval(() => {
+                const remaining = pairCodeExpireTime - Date.now();
+                if (remaining <= 0) {
+                    hidePairCode();
+                } else {
+                    const minutes = Math.ceil(remaining / 60000);
+                    document.getElementById('code-timer').textContent = `${minutes}分钟后失效`;
+                }
+            }, 10000); // 每10秒更新一次
         };
+
+        function hidePairCode() {
+            document.getElementById('code-display').classList.add('hidden');
+            document.getElementById('code').textContent = '------';
+            if (pairCodeTimer) {
+                clearInterval(pairCodeTimer);
+                pairCodeTimer = null;
+            }
+            pairCodeExpireTime = null;
+        }
 
         window.onNewFriend = function(name) {
             loadFriends();
+            // 添加好友后自动隐藏配对码
+            hidePairCode();
         };
 
         function updatePairBtn() {
@@ -611,6 +665,73 @@
         function showProfile() {
             if (window.AndroidBridge) AndroidBridge.showProfile();
         }
+
+        // ========== 路线模式 ==========
+        let routeStartTime = null;
+        let routeTimer = null;
+
+        window.onRouteModeStarted = function(routeName, endName) {
+            // 切换到路线面板
+            document.getElementById('pair-panel').classList.add('hidden');
+            document.getElementById('multi-panel').classList.add('hidden');
+            document.getElementById('route-panel').classList.remove('hidden');
+
+            // 设置路线信息
+            document.getElementById('route-name').textContent = routeName;
+            document.getElementById('route-end').textContent = endName;
+            document.getElementById('route-distance').textContent = '--';
+            document.getElementById('route-duration').textContent = '00:00';
+            document.getElementById('route-nearby').classList.add('hidden');
+
+            // 开始计时
+            routeStartTime = Date.now();
+            if (routeTimer) clearInterval(routeTimer);
+            routeTimer = setInterval(updateRouteDuration, 1000);
+
+            // 展开面板显示信息
+            if (window.AndroidBridge) AndroidBridge.toggleSheet();
+        };
+
+        function updateRouteDuration() {
+            if (!routeStartTime) return;
+            const elapsed = Math.floor((Date.now() - routeStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('route-duration').textContent = `${minutes}:${seconds}`;
+        }
+
+        window.onRouteProgress = function(distance, endLat, endLng) {
+            // 更新剩余距离
+            document.getElementById('route-distance').textContent = Math.round(distance);
+        };
+
+        window.onNearDestination = function() {
+            // 显示即将到达提示
+            document.getElementById('route-nearby').classList.remove('hidden');
+        };
+
+        function stopRouteSharing() {
+            if (window.AndroidBridge) AndroidBridge.stopSharing();
+        }
+
+        // 重写停止共享回调，处理路线模式
+        const originalOnShareState = window.onShareState;
+        window.onShareState = function(sharing) {
+            originalOnShareState(sharing);
+
+            if (!sharing && routeStartTime) {
+                // 停止计时
+                if (routeTimer) {
+                    clearInterval(routeTimer);
+                    routeTimer = null;
+                }
+                routeStartTime = null;
+
+                // 切换回好友面板
+                document.getElementById('route-panel').classList.add('hidden');
+                switchToMode('pair');
+            }
+        };
 
         // 默认显示好友面板
         switchToMode('pair');

@@ -64,6 +64,26 @@ class MainActivity : AppCompatActivity() {
     private var isFollowing = false
     private var isFirstLocation = true
 
+    // 路线出行模式
+    private var isRouteMode = false
+    private var routeData: RouteData? = null
+
+    data class RouteData(
+        val id: String,
+        val name: String,
+        val startLat: Double,
+        val startLng: Double,
+        val endLat: Double,
+        val endLng: Double,
+        val endName: String,
+        val sharedWith: String
+    )
+
+    // 路线标记
+    private var routePolyline: com.amap.api.maps.model.Polyline? = null
+    private var startMarker: Marker? = null
+    private var endMarker: Marker? = null
+
     // 标记点管理
     private val userMarkers = mutableMapOf<String, Marker>()
     private var myLocation: LatLng? = null
@@ -90,6 +110,9 @@ class MainActivity : AppCompatActivity() {
         prefsManager = PrefsManager(this)
         apiService = ApiService(this)
         userId = prefsManager.getUserId()
+
+        // 检查是否是路线出行模式
+        checkRouteMode(intent)
 
         // 隐私合规
         AMapLocationClient.updatePrivacyShow(this, true, true)
@@ -155,6 +178,101 @@ class MainActivity : AppCompatActivity() {
                 this.state = BottomSheetBehavior.STATE_EXPANDED
             }
         }
+    }
+
+    // 检查是否是路线出行模式
+    private fun checkRouteMode(intent: Intent) {
+        if (intent.getBooleanExtra("is_route_mode", false)) {
+            isRouteMode = true
+            routeData = RouteData(
+                id = intent.getStringExtra("route_id") ?: "",
+                name = intent.getStringExtra("route_name") ?: "",
+                startLat = intent.getDoubleExtra("start_lat", 0.0),
+                startLng = intent.getDoubleExtra("start_lng", 0.0),
+                endLat = intent.getDoubleExtra("end_lat", 0.0),
+                endLng = intent.getDoubleExtra("end_lng", 0.0),
+                endName = intent.getStringExtra("end_name") ?: "",
+                sharedWith = intent.getStringExtra("shared_with") ?: ""
+            )
+
+            // 延迟启动共享，等待地图初始化完成
+            mapView?.postDelayed({
+                startRouteSharing()
+            }, 1000)
+        }
+    }
+
+    // 启动路线共享
+    private fun startRouteSharing() {
+        routeData?.let { route ->
+            // 获取好友信息
+            val friend = prefsManager.getFriends().find { it.friendId == route.sharedWith }
+            val friendName = friend?.friendName ?: "好友"
+            val roomId = friend?.pairRoomId ?: ""
+
+            if (roomId.isEmpty()) {
+                Toast.makeText(this, "未找到配对房间，请先添加好友", Toast.LENGTH_LONG).show()
+                return
+            }
+
+            // 绘制路线
+            drawRouteOnMap(route)
+
+            // 启动位置共享
+            val user = prefsManager.getUser()
+            userName = user?.userName ?: "我"
+            currentRoomId = roomId
+
+            // 通知 WebView 切换到路线模式
+            webView.evaluateJavascript(
+                "window.onRouteModeStarted('${route.name.replace("'", "\\'")}', '${route.endName.replace("'", "\\'")}')",
+                null
+            )
+
+            // 启动共享
+            if (!checkNotificationPermission()) {
+                requestNotificationPermission()
+                return
+            }
+
+            LocationShareService.start(this)
+            connectSocket(isPairMode = true)
+        }
+    }
+
+    // 在地图上绘制路线
+    private fun drawRouteOnMap(route: RouteData) {
+        val startLatLng = LatLng(route.startLat, route.startLng)
+        val endLatLng = LatLng(route.endLat, route.endLng)
+
+        // 添加起点标记
+        startMarker = aMap?.addMarker(MarkerOptions()
+            .position(startLatLng)
+            .title("起点: ${route.name}")
+            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+        )
+
+        // 添加终点标记
+        endMarker = aMap?.addMarker(MarkerOptions()
+            .position(endLatLng)
+            .title("终点: ${route.endName}")
+            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
+        )
+
+        // 绘制直线（后续可以改为实际路线规划）
+        routePolyline = aMap?.addPolyline(com.amap.api.maps.model.PolylineOptions()
+            .add(startLatLng, endLatLng)
+            .width(12f)
+            .color(android.graphics.Color.parseColor("#FF8A65"))
+            .geodesic(true)
+        )
+
+        // 调整视野显示完整路线
+        val bounds = com.amap.api.maps.model.LatLngBounds.builder()
+            .include(startLatLng)
+            .include(endLatLng)
+            .build()
+        aMap?.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
     }
 
     private fun initMap() {
@@ -467,7 +585,30 @@ class MainActivity : AppCompatActivity() {
                 "window.onLocationUpdate('$userId', $lat, $lng, '${displayName.replace("'", "\\'")}', $speed, $bearing)",
                 null
             )
+
+            // 路线模式下计算到终点的距离
+            if (isRouteMode) {
+                routeData?.let { route ->
+                    val distance = calculateDistance(lat, lng, route.endLat, route.endLng)
+                    webView.evaluateJavascript(
+                        "window.onRouteProgress($distance, ${route.endLat}, ${route.endLng})",
+                        null
+                    )
+
+                    // 检查是否接近终点（100米内）
+                    if (distance < 100) {
+                        webView.evaluateJavascript("window.onNearDestination()", null)
+                    }
+                }
+            }
         }
+    }
+
+    // 计算两点间距离（米）
+    private fun calculateDistance(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Float {
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(lat1, lng1, lat2, lng2, results)
+        return results[0]
     }
 
     private fun updateUserLocationOnMap(data: JSONObject) {

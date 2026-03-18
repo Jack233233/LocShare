@@ -261,8 +261,24 @@ class RouteManagerActivity : AppCompatActivity() {
             val route = prefsManager.getRoutes().find { it.id == routeId }
             route?.let {
                 runOnUiThread {
-                    Toast.makeText(this@RouteManagerActivity, "开始路线: ${it.name}", Toast.LENGTH_SHORT).show()
-                    // TODO: 跳转到导航页面或开始路线追踪
+                    // 清除草稿
+                    prefsManager.clearRouteDraft()
+
+                    // 跳转到 MainActivity 并传递路线信息
+                    val intent = Intent(this@RouteManagerActivity, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        putExtra("route_id", it.id)
+                        putExtra("route_name", it.name)
+                        putExtra("start_lat", it.startLat)
+                        putExtra("start_lng", it.startLng)
+                        putExtra("end_lat", it.endLat)
+                        putExtra("end_lng", it.endLng)
+                        putExtra("end_name", it.endName)
+                        putExtra("shared_with", it.sharedWith)
+                        putExtra("is_route_mode", true)
+                    }
+                    startActivity(intent)
+                    finish()
                 }
             }
         }
