@@ -590,7 +590,10 @@
         // 显示添加弹窗
         function showAddModal() {
             document.getElementById('add-modal').classList.add('show');
-            resetForm();
+            // 尝试恢复草稿，如果没有草稿则重置表单
+            if (!restoreDraft()) {
+                resetForm();
+            }
         }
 
         function hideAddModal() {
@@ -879,6 +882,99 @@
                 AndroidBridge.goBack();
             }
         }
+
+        // 自动保存草稿
+        function autoSaveDraft() {
+            const name = document.getElementById('route-name').value.trim();
+            if (!name && !pendingStart && !pendingEnd) return;
+
+            const draft = {
+                name: name,
+                startName: pendingStart?.name || '',
+                startLat: pendingStart?.lat || 0,
+                startLng: pendingStart?.lng || 0,
+                endName: pendingEnd?.name || '',
+                endLat: pendingEnd?.lat || 0,
+                endLng: pendingEnd?.lng || 0,
+                sharedWith: selectedFriendId
+            };
+
+            if (window.AndroidBridge) {
+                AndroidBridge.saveRouteDraft(JSON.stringify(draft));
+            }
+        }
+
+        // 恢复草稿
+        function restoreDraft() {
+            if (window.AndroidBridge) {
+                const draftStr = AndroidBridge.getRouteDraft();
+                if (draftStr) {
+                    try {
+                        const draft = JSON.parse(draftStr);
+                        document.getElementById('route-name').value = draft.name || '';
+
+                        if (draft.startName) {
+                            pendingStart = {
+                                name: draft.startName,
+                                lat: draft.startLat,
+                                lng: draft.startLng
+                            };
+                            document.getElementById('start-input').value = draft.startName;
+                            document.getElementById('start-display').textContent = draft.startName;
+                            document.getElementById('start-display').classList.add('has-value');
+                        }
+
+                        if (draft.endName) {
+                            pendingEnd = {
+                                name: draft.endName,
+                                lat: draft.endLat,
+                                lng: draft.endLng
+                            };
+                            document.getElementById('end-input').value = draft.endName;
+                            document.getElementById('end-display').textContent = draft.endName;
+                            document.getElementById('end-display').classList.add('has-value');
+                        }
+
+                        if (draft.sharedWith) {
+                            selectedFriendId = draft.sharedWith;
+                        }
+
+                        checkFormValid();
+                        return true;
+                    } catch (e) {
+                        console.error('Restore draft failed:', e);
+                    }
+                }
+            }
+            return false;
+        }
+
+        // 清除草稿
+        function clearDraft() {
+            if (window.AndroidBridge) {
+                AndroidBridge.clearRouteDraft();
+            }
+        }
+
+        // 保存成功时清除草稿
+        window.onRouteSaved = function() {
+            clearDraft();
+            hideAddModal();
+            loadRoutes();
+        };
+
+        // 监听输入变化自动保存
+        document.getElementById('route-name').addEventListener('input', function() {
+            checkFormValid();
+            autoSaveDraft();
+        });
+
+        // 重写 selectAddress 以保存草稿
+        const originalSelectAddress = selectAddress;
+        selectAddress = function(type, name, lat, lng, address) {
+            originalSelectAddress(type, name, lat, lng, address);
+            autoSaveDraft();
+        };
 
         // 初始化
         init();

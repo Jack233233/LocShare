@@ -279,6 +279,55 @@ class RouteManagerActivity : AppCompatActivity() {
                 }
             }
         }
+
+        @JavascriptInterface
+        fun saveRouteDraft(draftJson: String) {
+            try {
+                val json = JSONObject(draftJson)
+                val draft = PrefsManager.RouteDraft(
+                    name = json.getString("name"),
+                    startName = json.getString("startName"),
+                    startLat = json.getDouble("startLat"),
+                    startLng = json.getDouble("startLng"),
+                    endName = json.getString("endName"),
+                    endLat = json.getDouble("endLat"),
+                    endLng = json.getDouble("endLng"),
+                    sharedWith = json.optString("sharedWith", "")
+                )
+                prefsManager.saveRouteDraft(draft)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        @JavascriptInterface
+        fun getRouteDraft(): String {
+            val draft = prefsManager.getRouteDraft()
+            return if (draft != null) {
+                JSONObject().apply {
+                    put("name", draft.name)
+                    put("startName", draft.startName)
+                    put("startLat", draft.startLat)
+                    put("startLng", draft.startLng)
+                    put("endName", draft.endName)
+                    put("endLat", draft.endLat)
+                    put("endLng", draft.endLng)
+                    put("sharedWith", draft.sharedWith)
+                }.toString()
+            } else {
+                "{}"
+            }
+        }
+
+        @JavascriptInterface
+        fun clearRouteDraft() {
+            prefsManager.clearRouteDraft()
+        }
+
+        @JavascriptInterface
+        fun hasRouteDraft(): Boolean {
+            return prefsManager.hasRouteDraft()
+        }
     }
 
     override fun onBackPressed() {

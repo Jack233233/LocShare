@@ -19,6 +19,7 @@ class PrefsManager(context: Context) {
         private const val KEY_IS_REGISTERED = "is_registered"
         private const val KEY_FRIENDS = "friends"
         private const val KEY_ROUTES = "routes"
+        private const val KEY_ROUTE_DRAFT = "route_draft"   // 路线编辑草稿
     }
 
     // ==================== 用户管理（新版）====================
@@ -185,5 +186,72 @@ class PrefsManager(context: Context) {
 
     fun getFavoriteRoutes(): List<Route> {
         return getRoutes().filter { it.isFavorite }
+    }
+
+    // ==================== 路线编辑草稿 ====================
+
+    data class RouteDraft(
+        val name: String,
+        val startName: String,
+        val startLat: Double,
+        val startLng: Double,
+        val endName: String,
+        val endLat: Double,
+        val endLng: Double,
+        val sharedWith: String
+    )
+
+    /**
+     * 保存路线编辑草稿
+     */
+    fun saveRouteDraft(draft: RouteDraft) {
+        val json = JSONObject().apply {
+            put("name", draft.name)
+            put("startName", draft.startName)
+            put("startLat", draft.startLat)
+            put("startLng", draft.startLng)
+            put("endName", draft.endName)
+            put("endLat", draft.endLat)
+            put("endLng", draft.endLng)
+            put("sharedWith", draft.sharedWith)
+        }
+        prefs.edit().putString(KEY_ROUTE_DRAFT, json.toString()).apply()
+    }
+
+    /**
+     * 获取路线编辑草稿
+     */
+    fun getRouteDraft(): RouteDraft? {
+        val jsonStr = prefs.getString(KEY_ROUTE_DRAFT, null) ?: return null
+        return try {
+            val json = JSONObject(jsonStr)
+            RouteDraft(
+                name = json.getString("name"),
+                startName = json.getString("startName"),
+                startLat = json.getDouble("startLat"),
+                startLng = json.getDouble("startLng"),
+                endName = json.getString("endName"),
+                endLat = json.getDouble("endLat"),
+                endLng = json.getDouble("endLng"),
+                sharedWith = json.optString("sharedWith", "")
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /**
+     * 清除路线编辑草稿
+     */
+    fun clearRouteDraft() {
+        prefs.edit().remove(KEY_ROUTE_DRAFT).apply()
+    }
+
+    /**
+     * 检查是否有未保存的路线草稿
+     */
+    fun hasRouteDraft(): Boolean {
+        return prefs.getString(KEY_ROUTE_DRAFT, null) != null
     }
 }
