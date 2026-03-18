@@ -132,6 +132,15 @@ class MainActivity : AppCompatActivity() {
         checkLocationPermission()
     }
 
+    // SingleTop 模式下通过 onNewIntent 接收数据
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        intent?.let {
+            setIntent(it)
+            checkRouteMode(it)
+        }
+    }
+
     // 初始化 BottomSheet
     private fun initBottomSheet() {
         // 设置圆角裁剪
@@ -195,10 +204,17 @@ class MainActivity : AppCompatActivity() {
                 sharedWith = intent.getStringExtra("shared_with") ?: ""
             )
 
+            android.util.Log.d("RouteMode", "Received route: ${routeData?.name}, sharedWith: ${routeData?.sharedWith}")
+
             // 延迟启动共享，等待地图初始化完成
-            mapView?.postDelayed({
-                startRouteSharing()
-            }, 1000)
+            binding.root.postDelayed({
+                if (aMap != null) {
+                    startRouteSharing()
+                } else {
+                    android.util.Log.e("RouteMode", "Map not ready yet")
+                    Toast.makeText(this, "地图未准备好", Toast.LENGTH_SHORT).show()
+                }
+            }, 1500)
         }
     }
 
@@ -223,11 +239,8 @@ class MainActivity : AppCompatActivity() {
             userName = user?.userName ?: "我"
             currentRoomId = roomId
 
-            // 通知 WebView 切换到路线模式
-            webView.evaluateJavascript(
-                "window.onRouteModeStarted('${route.name.replace("'", "\\'")}', '${route.endName.replace("'", "\\'")}')",
-                null
-            )
+            // 显示悬浮按钮
+            showRouteShareFab()
 
             // 启动共享
             if (!checkNotificationPermission()) {
@@ -245,11 +258,11 @@ class MainActivity : AppCompatActivity() {
         val startLatLng = LatLng(route.startLat, route.startLng)
         val endLatLng = LatLng(route.endLat, route.endLng)
 
-        // 添加起点标记
+        // 添加起点标记（蓝色，和自己的绿色区分）
         startMarker = aMap?.addMarker(MarkerOptions()
             .position(startLatLng)
             .title("起点: ${route.name}")
-            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
         )
 
         // 添加终点标记
@@ -273,6 +286,58 @@ class MainActivity : AppCompatActivity() {
             .include(endLatLng)
             .build()
         aMap?.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
+    }
+
+    // 显示路线共享悬浮按钮
+    private fun showRouteShareFab() {
+        runOnUiThread {
+            binding.routeShareFab.visibility = View.VISIBLE
+            binding.routeShareFab.setOnClickListener { showRouteShareDialog() }
+
+            // 设置弹窗按钮点击事件
+            binding.btnStopRouteShare.setOnClickListener {
+                stopSharing()
+                hideRouteShareDialog()
+            }
+            binding.btnCloseDialog.setOnClickListener { hideRouteShareDialog() }
+            binding.routeShareDialog.setOnClickListener { hideRouteShareDialog() }
+
+            // 初始化弹窗信息
+            routeData?.let { route ->
+                binding.tvRouteName.text = route.name
+                binding.tvRouteEnd.text = "终点：${route.endName}"
+
+                val friend = prefsManager.getFriends().find { it.friendId == route.sharedWith }
+                binding.tvSharedWith.text = "共享给：${friend?.friendName ?: "未知"}"
+            }
+        }
+    }
+
+    // 显示路线共享弹窗
+    private fun showRouteShareDialog() {
+        runOnUiThread {
+            binding.routeShareDialog.visibility = View.VISIBLE
+            updateRouteShareInfo()
+        }
+    }
+
+    // 隐藏路线共享弹窗
+    private fun hideRouteShareDialog() {
+        runOnUiThread {
+            binding.routeShareDialog.visibility = View.GONE
+        }
+    }
+
+    // 更新弹窗信息（距离等）
+    private fun updateRouteShareInfo() {
+        routeData?.let { route ->
+            myLocation?.let { location ->
+                val distance = calculateDistance(location.latitude, location.longitude, route.endLat, route.endLng)
+                binding.tvRemainingDistance.text = distance.toInt().toString()
+            } ?: run {
+                binding.tvRemainingDistance.text = "--"
+            }
+        }
     }
 
     private fun initMap() {
@@ -498,6 +563,24 @@ class MainActivity : AppCompatActivity() {
             isFollowing = false
             isSharingLocation = false
             webView.evaluateJavascript("window.onShareState(false)", null)
+
+            // 清理路线模式
+            if (isRouteMode) {
+                isRouteMode = false
+                routeData = null
+
+                // 隐藏悬浮按钮和弹窗
+                binding.routeShareFab.visibility = View.GONE
+                binding.routeShareDialog.visibility = View.GONE
+
+                // 清除路线标记
+                routePolyline?.remove()
+                routePolyline = null
+                startMarker?.remove()
+                startMarker = null
+                endMarker?.remove()
+                endMarker = null
+            }
         }
     }
 
@@ -590,14 +673,15 @@ class MainActivity : AppCompatActivity() {
             if (isRouteMode) {
                 routeData?.let { route ->
                     val distance = calculateDistance(lat, lng, route.endLat, route.endLng)
-                    webView.evaluateJavascript(
-                        "window.onRouteProgress($distance, ${route.endLat}, ${route.endLng})",
-                        null
-                    )
+
+                    // 更新弹窗中的距离显示
+                    if (binding.routeShareDialog.visibility == View.VISIBLE) {
+                        binding.tvRemainingDistance.text = distance.toInt().toString()
+                    }
 
                     // 检查是否接近终点（100米内）
                     if (distance < 100) {
-                        webView.evaluateJavascript("window.onNearDestination()", null)
+                        // 可以显示提示
                     }
                 }
             }
