@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     private var aMap: AMap? = null
     private var locationClient: AMapLocationClient? = null
     private var socket: Socket? = null
+    private var routeListenerSocket: Socket? = null  // 独立的路线监听Socket
 
     private lateinit var prefsManager: PrefsManager
     private lateinit var apiService: ApiService
@@ -92,13 +93,27 @@ class MainActivity : AppCompatActivity() {
         val startLng: Double,
         val endLat: Double,
         val endLng: Double,
-        val endName: String
+        val endName: String,
+        val pairRoomId: String = ""  // 用于加入房间接收位置
+    )
+
+    // 好友位置共享模式（单向接收）
+    private var isFriendLocationMode = false
+    private var friendLocationData: FriendLocationData? = null
+
+    data class FriendLocationData(
+        val friendId: String,
+        val friendName: String,
+        val pairRoomId: String
     )
 
     // 好友路线标记
     private var friendRoutePolyline: com.amap.api.maps.model.Polyline? = null
     private var friendStartMarker: Marker? = null
     private var friendEndMarker: Marker? = null
+    private var friendLocationMarker: Marker? = null  // 好友实时位置标记
+    private var friendTrackPolyline: com.amap.api.maps.model.Polyline? = null  // 轨迹线
+    private val friendTrackPoints = mutableListOf<LatLng>()  // 轨迹点列表
 
     // 路线标记
     private var routePolyline: com.amap.api.maps.model.Polyline? = null
@@ -138,6 +153,9 @@ class MainActivity : AppCompatActivity() {
         // 隐私合规
         AMapLocationClient.updatePrivacyShow(this, true, true)
         AMapLocationClient.updatePrivacyAgree(this, true)
+
+        // 启动路线监听（用于接收好友的行程共享）
+        startRouteListener()
 
         // 初始化地图
         mapView = binding.mapView
@@ -363,6 +381,125 @@ class MainActivity : AppCompatActivity() {
 
     // ==================== 好友路线模式（接收方）====================
 
+    // 加入配对房间接收位置更新（仅接收，不上传自己位置）
+    private fun joinPairRoomForRoute(pairRoomId: String) {
+        val data = JSONObject().apply {
+            put("userId", userId)
+            put("userName", prefsManager.getUser()?.userName ?: "用户")
+            put("pairRoomId", pairRoomId)
+        }
+        routeListenerSocket?.emit("join-pair", data)
+        android.util.Log.d("RouteListener", "Joined pair room for route: $pairRoomId")
+    }
+
+    // 加入配对房间接收位置（好友位置共享模式）
+    private fun joinPairRoomForLocation(pairRoomId: String) {
+        val data = JSONObject().apply {
+            put("userId", userId)
+            put("userName", prefsManager.getUser()?.userName ?: "用户")
+            put("pairRoomId", pairRoomId)
+        }
+        routeListenerSocket?.emit("join-pair", data)
+        android.util.Log.d("RouteListener", "Joined pair room for location: $pairRoomId")
+    }
+
+    // 显示好友位置悬浮按钮
+    private fun showFriendLocationFab() {
+        runOnUiThread {
+            binding.routeShareFab.text = "👤 ${friendLocationData?.friendName} 共享中"
+            binding.routeShareFab.setBackgroundResource(R.drawable.bg_friend_route_fab)
+            binding.routeShareFab.visibility = View.VISIBLE
+            binding.routeShareFab.setOnClickListener { showFriendLocationDialog() }
+
+            // 设置弹窗按钮点击事件
+            binding.btnStopRouteShare.setOnClickListener {
+                hideFriendLocationMode()
+                hideRouteShareDialog()
+            }
+            binding.btnCloseDialog.setOnClickListener { hideRouteShareDialog() }
+            binding.routeShareDialog.setOnClickListener { hideRouteShareDialog() }
+
+            // 初始化弹窗信息
+            binding.tvRouteName.text = "好友位置共享"
+            binding.tvRouteEnd.text = "好友：${friendLocationData?.friendName}"
+            binding.tvSharedWith.text = ""
+            binding.tvRemainingDistance.text = "--"
+        }
+    }
+
+    // 显示好友位置弹窗
+    private fun showFriendLocationDialog() {
+        runOnUiThread {
+            binding.routeShareDialog.visibility = View.VISIBLE
+        }
+    }
+
+    // 隐藏好友位置模式
+    private fun hideFriendLocationMode() {
+        isFriendLocationMode = false
+        friendLocationData = null
+
+        // 清除好友位置和轨迹
+        friendLocationMarker?.remove()
+        friendLocationMarker = null
+        friendTrackPolyline?.remove()
+        friendTrackPolyline = null
+        friendTrackPoints.clear()
+
+        // 恢复悬浮按钮
+        binding.routeShareFab.visibility = View.GONE
+        binding.routeShareFab.text = "📍 行程共享中"
+        binding.routeShareFab.setBackgroundResource(R.drawable.bg_route_share_fab)
+    }
+
+    // 更新好友位置（接收方）
+    private fun updateFriendLocationOnMap(data: JSONObject, isRouteMode: Boolean = true) {
+        val friendId = data.optString("userId")
+        val lat = data.optDouble("lat", 0.0)
+        val lng = data.optDouble("lng", 0.0)
+        val name = data.optString("userName",
+            if (isRouteMode) friendRouteData?.friendName ?: "好友"
+            else friendLocationData?.friendName ?: "好友"
+        )
+
+        if (lat == 0.0 && lng == 0.0) return
+
+        val latLng = LatLng(lat, lng)
+
+        // 添加到轨迹点列表
+        friendTrackPoints.add(latLng)
+
+        // 更新或创建好友位置标记
+        if (friendLocationMarker != null) {
+            friendLocationMarker?.position = latLng
+        } else {
+            friendLocationMarker = aMap?.addMarker(MarkerOptions()
+                .position(latLng)
+                .title(name)
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+            )
+        }
+
+        // 更新轨迹线（如果轨迹点大于1个）
+        if (friendTrackPoints.size >= 2) {
+            friendTrackPolyline?.remove()
+            friendTrackPolyline = aMap?.addPolyline(com.amap.api.maps.model.PolylineOptions()
+                .addAll(friendTrackPoints)
+                .width(8f)
+.color(android.graphics.Color.parseColor("#4DB6AC")))  // 青绿色轨迹
+        }
+
+        // 更新弹窗中的剩余距离（仅在路线模式下计算）
+        if (isRouteMode) {
+            friendRouteData?.let { route ->
+                val distance = calculateDistance(lat, lng, route.endLat, route.endLng)
+                binding.tvRemainingDistance.text = distance.toInt().toString()
+            }
+        }
+
+        android.util.Log.d("RouteListener", "Friend location updated: $lat, $lng")
+    }
+
     // 绘制好友的路线
     private fun drawFriendRouteOnMap() {
         friendRouteData?.let { route ->
@@ -435,7 +572,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // 隐藏好友路线模式
-    private fun hideFriendRouteMode() {
+    private fun hideFriendRouteMode(leaveRoom: Boolean = true) {
         isFriendRouteMode = false
         friendRouteData = null
 
@@ -446,6 +583,18 @@ class MainActivity : AppCompatActivity() {
         friendStartMarker = null
         friendEndMarker?.remove()
         friendEndMarker = null
+
+        // 清除好友位置和轨迹
+        friendLocationMarker?.remove()
+        friendLocationMarker = null
+        friendTrackPolyline?.remove()
+        friendTrackPolyline = null
+        friendTrackPoints.clear()
+
+        // 离开配对房间（只接收位置的模式）- 仅在用户主动停止时离开
+        if (leaveRoom) {
+            routeListenerSocket?.emit("leave")
+        }
 
         // 恢复悬浮按钮
         binding.routeShareFab.visibility = View.GONE
@@ -566,6 +715,178 @@ class MainActivity : AppCompatActivity() {
 
     fun getCurrentLocation(): LatLng? = myLocation
 
+    // ========== 独立路线监听（不需要点击开始共享）==========
+
+    private fun startRouteListener() {
+        lifecycleScope.launch {
+            try {
+                // 如果已经存在监听连接，不需要重复创建
+                if (routeListenerSocket?.connected() == true) return@launch
+
+                routeListenerSocket = IO.socket(SERVER_URL).apply {
+                    on(Socket.EVENT_CONNECT) {
+                        android.util.Log.d("RouteListener", "Route listener socket connected")
+
+                        // 注册为用户，监听好友的路线共享
+                        val data = JSONObject().apply {
+                            put("userId", userId)
+                            put("userName", prefsManager.getUser()?.userName ?: "用户")
+                        }
+                        emit("register-route-listener", data)
+                    }
+
+                    // 好友开始位置共享（普通位置共享，非路线）
+                    on("friend-location-started") { args ->
+                        val data = args[0] as JSONObject
+                        val friendName = data.optString("userName")
+                        val friendId = data.optString("userId")
+                        val pairRoomId = data.optString("pairRoomId", "")
+
+                        // 过滤自己发起的
+                        if (friendId == userId) {
+                            android.util.Log.d("RouteListener", "Ignoring own location share")
+                            return@on
+                        }
+
+                        runOnUiThread {
+                            // 设置为好友位置共享模式
+                            isFriendLocationMode = true
+                            friendLocationData = FriendLocationData(
+                                friendId = friendId,
+                                friendName = friendName,
+                                pairRoomId = pairRoomId
+                            )
+
+                            // 显示好友位置悬浮按钮
+                            showFriendLocationFab()
+
+                            // 显示通知
+                            Toast.makeText(this@MainActivity, "$friendName 开始共享位置", Toast.LENGTH_LONG).show()
+
+                            android.util.Log.d("RouteListener", "Received friend location share from: $friendName")
+
+                            // 加入配对房间接收位置更新
+                            if (pairRoomId.isNotEmpty()) {
+                                joinPairRoomForLocation(pairRoomId)
+                            }
+                        }
+                    }
+
+                    // 好友停止位置共享
+                    on("friend-location-stopped") { args ->
+                        val data = args[0] as JSONObject
+                        val fromUserId = data.optString("userId")
+
+                        // 只处理当前正在显示的好友
+                        if (isFriendLocationMode && fromUserId == friendLocationData?.friendId) {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "${friendLocationData?.friendName} 已停止共享位置", Toast.LENGTH_LONG).show()
+                                hideFriendLocationMode()
+                            }
+                        }
+                    }
+
+                    // 好友开始路线共享
+                    on("friend-route-started") { args ->
+                        val data = args[0] as JSONObject
+                        val routeJson = data.optJSONObject("routeData")
+                        val friendName = data.optString("userName")
+                        val friendId = data.optString("userId")
+                        val pairRoomId = data.optString("pairRoomId", "")
+
+                        // 过滤自己发起的路线
+                        if (friendId == userId) {
+                            android.util.Log.d("RouteListener", "Ignoring own route share")
+                            return@on
+                        }
+
+                        runOnUiThread {
+                            // 设置为好友路线模式
+                            isFriendRouteMode = true
+                            friendRouteData = FriendRouteData(
+                                friendId = friendId,
+                                friendName = friendName,
+                                routeId = routeJson?.optString("id") ?: "",
+                                routeName = routeJson?.optString("name") ?: "",
+                                startLat = routeJson?.optDouble("startLat") ?: 0.0,
+                                startLng = routeJson?.optDouble("startLng") ?: 0.0,
+                                endLat = routeJson?.optDouble("endLat") ?: 0.0,
+                                endLng = routeJson?.optDouble("endLng") ?: 0.0,
+                                endName = routeJson?.optString("endName") ?: "",
+                                pairRoomId = pairRoomId
+                            )
+
+                            // 绘制好友的路线
+                            drawFriendRouteOnMap()
+
+                            // 显示悬浮窗
+                            showFriendRouteFab()
+
+                            // 显示通知
+                            Toast.makeText(this@MainActivity, "$friendName 开始共享行程", Toast.LENGTH_LONG).show()
+
+                            android.util.Log.d("RouteListener", "Received friend route: ${friendRouteData?.routeName}")
+
+                            // 加入配对房间接收位置更新
+                            if (pairRoomId.isNotEmpty()) {
+                                joinPairRoomForRoute(pairRoomId)
+                            }
+                        }
+                    }
+
+                    // 接收好友位置更新（轨迹）
+                    on("location-update") { args ->
+                        val data = args[0] as JSONObject
+                        val fromUserId = data.optString("userId")
+
+                        // 处理好友路线模式的位置
+                        if (isFriendRouteMode && fromUserId == friendRouteData?.friendId) {
+                            runOnUiThread {
+                                updateFriendLocationOnMap(data, isRouteMode = true)
+                            }
+                        }
+                        // 处理好友位置共享模式的位置
+                        else if (isFriendLocationMode && fromUserId == friendLocationData?.friendId) {
+                            runOnUiThread {
+                                updateFriendLocationOnMap(data, isRouteMode = false)
+                            }
+                        }
+                    }
+
+                    // 好友停止路线共享
+                    on("friend-route-stopped") { args ->
+                        val data = args[0] as JSONObject
+                        val fromUserId = data.optString("userId")
+
+                        // 只处理当前正在显示的好友
+                        if (isFriendRouteMode && fromUserId == friendRouteData?.friendId) {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "${friendRouteData?.friendName} 已停止共享", Toast.LENGTH_LONG).show()
+                                hideFriendRouteMode(leaveRoom = false)  // 不离开房间，保持连接以便下次接收
+                                binding.routeShareDialog.visibility = View.GONE
+                            }
+                        }
+                    }
+
+                    on(Socket.EVENT_DISCONNECT) {
+                        android.util.Log.d("RouteListener", "Route listener socket disconnected")
+                    }
+
+                    connect()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.util.Log.e("RouteListener", "Failed to start route listener: ${e.message}")
+            }
+        }
+    }
+
+    private fun stopRouteListener() {
+        routeListenerSocket?.disconnect()
+        routeListenerSocket?.off()
+        routeListenerSocket = null
+    }
+
     // ========== Socket.io 连接 ==========
 
     private fun connectSocket(isPairMode: Boolean) {
@@ -591,6 +912,15 @@ class MainActivity : AppCompatActivity() {
 
                         if (isPairMode) {
                             emit("join-pair", data)
+                            // 通知好友我开始了位置共享（单向通知）
+                            val friend = prefsManager.getFriends().find { it.pairRoomId == currentRoomId }
+                            if (friend != null) {
+                                emit("start-location-sharing", JSONObject().apply {
+                                    put("pairRoomId", currentRoomId)
+                                    put("sharedWith", friend.friendId)
+                                })
+                                android.util.Log.d("LocationShare", "Notified friend ${friend.friendId} about location sharing")
+                            }
                         } else {
                             emit("join", data)
                         }
@@ -714,6 +1044,29 @@ class MainActivity : AppCompatActivity() {
     private fun exitSharing() {
         if (isSharingLocation) {
             stopSharingLocation()
+        }
+
+        // 如果是路线模式，发送停止共享事件
+        if (isRouteMode && routeData != null) {
+            val stopData = JSONObject().apply {
+                put("pairRoomId", currentRoomId)
+                put("sharedWith", routeData?.sharedWith)
+            }
+            socket?.emit("stop-route-sharing", stopData)
+            android.util.Log.d("RouteMode", "Sent stop route sharing")
+        }
+
+        // 如果是普通好友位置共享，发送停止事件
+        if (currentRoomId.isNotEmpty() && !isRouteMode) {
+            val friend = prefsManager.getFriends().find { it.pairRoomId == currentRoomId }
+            if (friend != null) {
+                val stopData = JSONObject().apply {
+                    put("pairRoomId", currentRoomId)
+                    put("sharedWith", friend.friendId)
+                }
+                socket?.emit("stop-location-sharing", stopData)
+                android.util.Log.d("LocationShare", "Sent stop location sharing to ${friend.friendId}")
+            }
         }
 
         LocationShareService.stop(this)
@@ -1028,6 +1381,7 @@ class MainActivity : AppCompatActivity() {
         mapView?.onDestroy()
         socket?.disconnect()
         socket?.off()
+        stopRouteListener()
         webView.destroy()
     }
 
