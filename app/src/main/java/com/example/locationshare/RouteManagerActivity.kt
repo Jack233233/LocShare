@@ -1,6 +1,7 @@
 package com.example.locationshare
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -13,19 +14,12 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.example.locationshare.databinding.ActivityRouteManagerBinding
 import com.example.locationshare.model.Route
 import com.example.locationshare.utils.PrefsManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.*
-import java.util.concurrent.TimeUnit
 
 class RouteManagerActivity : AppCompatActivity() {
 
@@ -33,13 +27,71 @@ class RouteManagerActivity : AppCompatActivity() {
     private lateinit var prefsManager: PrefsManager
     private lateinit var webView: WebView
 
-    private val AMAP_KEY = "99d33a7ce806060acfffa9a80ae613bc"
+    companion object {
+        const val REQUEST_MAP_PICKER = 1001
+        const val KEY_PENDING_TYPE = "pending_type"
+    }
 
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
+    private var pendingPickerType: String? = null
+    private var pendingMapResult: MapPickerResult? = null
 
+    data class MapPickerResult(val type: String, val address: String, val lat: Double, val lng: Double)
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingPickerType?.let { outState.putString(KEY_PENDING_TYPE, it) }
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        pendingPickerType = savedInstanceState.getString(KEY_PENDING_TYPE)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_MAP_PICKER && resultCode == RESULT_OK && data != null) {
+            val address = data.getStringExtra(RouteMapPickerActivity.RESULT_ADDRESS) ?: ""
+            val lat = data.getDoubleExtra(RouteMapPickerActivity.RESULT_LAT, 0.0)
+            val lng = data.getDoubleExtra(RouteMapPickerActivity.RESULT_LNG, 0.0)
+
+            android.util.Log.d("RouteManager", "onActivityResult: address=$address, lat=$lat, lng=$lng")
+
+            // 校验数据有效性
+            if (lat.isNaN() || lng.isNaN() || lat == 0.0 && lng == 0.0) {
+                android.util.Log.e("RouteManager", "Invalid coordinates: lat=$lat, lng=$lng")
+                Toast.makeText(this, "获取位置信息失败", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            val type = pendingPickerType
+            if (type == null) {
+                android.util.Log.e("RouteManager", "pendingPickerType is null!")
+                return
+            }
+
+            android.util.Log.d("RouteManager", "Map picked: type=$type, address=$address, lat=$lat, lng=$lng")
+
+            // 检查 webView 是否已初始化
+            if (!::webView.isInitialized) {
+                android.util.Log.e("RouteManager", "WebView not initialized!")
+                return
+            }
+
+            // 存储结果，让 JS 通过 bridge 来获取
+            pendingMapResult = MapPickerResult(type, address, lat, lng)
+
+            // 延迟通知 JS
+            webView.postDelayed({
+                try {
+                    webView.evaluateJavascript("window.onMapPicked()") { result ->
+                        android.util.Log.d("RouteManager", "JS notified, result: $result")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("RouteManager", "JS execution failed", e)
+                }
+            }, 200)
+        }
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityRouteManagerBinding.inflate(layoutInflater)
@@ -140,6 +192,31 @@ class RouteManagerActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun openMapPicker(type: String) {
+            runOnUiThread {
+                RouteMapPickerActivity.start(this@RouteManagerActivity, type, REQUEST_MAP_PICKER)
+                pendingPickerType = type
+            }
+        }
+
+        @JavascriptInterface
+        fun getMapPickerResult(): String {
+            val result = pendingMapResult
+            return if (result != null) {
+                val json = org.json.JSONObject().apply {
+                    put("type", result.type)
+                    put("address", result.address)
+                    put("lat", result.lat)
+                    put("lng", result.lng)
+                }
+                pendingMapResult = null  // 消费掉
+                json.toString()
+            } else {
+                "{}"
+            }
+        }
+
+        @JavascriptInterface
         fun saveRoute(routeJson: String) {
             try {
                 val json = JSONObject(routeJson)
@@ -187,61 +264,6 @@ class RouteManagerActivity : AppCompatActivity() {
             runOnUiThread {
                 Toast.makeText(this@RouteManagerActivity, "已删除", Toast.LENGTH_SHORT).show()
                 webView.evaluateJavascript("window.onRouteDeleted()", null)
-            }
-        }
-
-        @JavascriptInterface
-        fun searchAddress(type: String, keyword: String) {
-            lifecycleScope.launch(Dispatchers.IO) {
-                try {
-                    android.util.Log.d("RouteSearch", "Searching for: $keyword, type: $type")
-
-                    // URL 编码关键词
-                    val encodedKeyword = java.net.URLEncoder.encode(keyword, "UTF-8")
-                    val url = "https://restapi.amap.com/v3/assistant/inputtips?key=$AMAP_KEY&keywords=$encodedKeyword&city=北京"
-
-                    android.util.Log.d("RouteSearch", "URL: $url")
-
-                    val request = Request.Builder().url(url).build()
-                    val response = httpClient.newCall(request).execute()
-                    val body = response.body?.string()
-
-                    android.util.Log.d("RouteSearch", "Response: $body")
-
-                    val results = JSONArray()
-                    if (body != null) {
-                        val json = JSONObject(body)
-                        if (json.optString("status") == "1") {
-                            val tips = json.optJSONArray("tips") ?: JSONArray()
-                            val count = Math.min(tips.length(), 10)
-                            for (i in 0 until count) {
-                                val tip = tips.getJSONObject(i)
-                                val location = tip.optString("location", "")
-                                android.util.Log.d("RouteSearch", "Tip $i: ${tip.optString("name")}, location: $location")
-                                if (location.contains(",")) {
-                                    val parts = location.split(",")
-                                    results.put(JSONObject().apply {
-                                        put("name", tip.optString("name"))
-                                        put("address", tip.optString("address", ""))
-                                        put("lng", parts[0].toDoubleOrNull() ?: 0.0)
-                                        put("lat", parts[1].toDoubleOrNull() ?: 0.0)
-                                    })
-                                }
-                            }
-                        }
-                    }
-
-                    android.util.Log.d("RouteSearch", "Results count: ${results.length()}")
-
-                    withContext(Dispatchers.Main) {
-                        webView.evaluateJavascript(
-                            "window.onSearchResults('$type', '${results.toString().replace("'", "\\'")}')",
-                            null
-                        )
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("RouteSearch", "Error: ${e.message}", e)
-                }
             }
         }
 

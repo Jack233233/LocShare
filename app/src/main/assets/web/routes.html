@@ -394,6 +394,28 @@
             background: #FFF5F2;
             color: #FF8A65;
         }
+        /* 地图选点按钮 */
+        .btn-map-picker {
+            margin-top: 8px;
+            padding: 10px 16px;
+            border: 1.5px dashed #FF8A65;
+            border-radius: 10px;
+            background: white;
+            color: #FF8A65;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.15s;
+            width: 100%;
+        }
+        .btn-map-picker:active {
+            background: #FFF5F2;
+            transform: scale(0.98);
+        }
     </style>
 </head>
 <body>
@@ -429,6 +451,7 @@
                         <input type="text" class="form-input" id="start-input" placeholder="输入地址搜索起点..." oninput="searchAddress('start', this.value)">
                         <div class="search-results" id="start-results"></div>
                     </div>
+                    <button class="btn-map-picker" onclick="openMapPicker('start')">🗺️ 地图选点</button>
                     <input type="hidden" id="start-lat">
                     <input type="hidden" id="start-lng">
                     <input type="hidden" id="start-name">
@@ -440,6 +463,7 @@
                         <input type="text" class="form-input" id="end-input" placeholder="输入地址搜索终点..." oninput="searchAddress('end', this.value)">
                         <div class="search-results" id="end-results"></div>
                     </div>
+                    <button class="btn-map-picker" onclick="openMapPicker('end')">🗺️ 地图选点</button>
                     <input type="hidden" id="end-lat">
                     <input type="hidden" id="end-lng">
                     <input type="hidden" id="end-name">
@@ -575,8 +599,14 @@
 
         function resetForm() {
             document.getElementById('route-name').value = '';
-            document.getElementById('start-picker').textContent = '点击选择起点';
-            document.getElementById('end-picker').textContent = '点击选择终点';
+            document.getElementById('start-input').value = '';
+            document.getElementById('end-input').value = '';
+            document.getElementById('start-display').textContent = '未选择';
+            document.getElementById('start-display').classList.remove('has-value');
+            document.getElementById('end-display').textContent = '未选择';
+            document.getElementById('end-display').classList.remove('has-value');
+            document.getElementById('start-results').classList.remove('show');
+            document.getElementById('end-results').classList.remove('show');
             pendingStart = null;
             pendingEnd = null;
             selectedFriendId = '';
@@ -717,14 +747,52 @@
             console.log('Showing', pois.length, 'results');
         }
 
+        // 打开地图选点
+        function openMapPicker(type) {
+            if (window.AndroidBridge) {
+                AndroidBridge.openMapPicker(type);
+            }
+        }
+
+        // 接收地图选点结果 - 从 Android 获取数据
+        window.onMapPicked = function() {
+            console.log('onMapPicked called');
+            try {
+                if (!window.AndroidBridge) {
+                    console.error('AndroidBridge not available');
+                    return;
+                }
+                const resultStr = AndroidBridge.getMapPickerResult();
+                console.log('Map picker result:', resultStr);
+                const result = JSON.parse(resultStr);
+                if (result.type && result.address) {
+                    selectAddress(result.type, result.address, result.lat, result.lng, '');
+                }
+            } catch (e) {
+                console.error('onMapPicked error:', e);
+            }
+        };
+
         // 选择地址
         function selectAddress(type, name, lat, lng, address) {
-            document.getElementById(type + '-results').classList.remove('show');
-            document.getElementById(type + '-input').value = name;
+            console.log('selectAddress:', type, name, lat, lng, address);
+            if (!type || !name || lat == null || lng == null) {
+                console.error('Invalid params for selectAddress');
+                return;
+            }
+
+            const resultsEl = document.getElementById(type + '-results');
+            const inputEl = document.getElementById(type + '-input');
+            const displayEl = document.getElementById(type + '-display');
+
+            if (resultsEl) resultsEl.classList.remove('show');
+            if (inputEl) inputEl.value = name;
 
             const display = document.getElementById(type + '-display');
-            display.textContent = name + (address ? ' (' + address + ')' : '');
-            display.classList.add('has-value');
+            if (display) {
+                display.textContent = name + (address ? ' (' + address + ')' : '');
+                display.classList.add('has-value');
+            }
 
             const point = { name, lat, lng };
             if (type === 'start') {

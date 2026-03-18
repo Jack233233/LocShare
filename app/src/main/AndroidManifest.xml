@@ -25,6 +25,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Together"
         android:usesCleartextTraffic="true"
+        android:allowNativeHeapPointerTagging="false"
         tools:targetApi="31">
 
         <!-- 高德地图 API Key -->
@@ -65,6 +66,13 @@
             android:name=".RouteManagerActivity"
             android:label="路线管理"
             android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.Together"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <activity
+            android:name=".RouteMapPickerActivity"
+            android:label="选择位置"
+            android:parentActivityName=".RouteManagerActivity"
             android:theme="@style/Theme.Together" />
 
         <activity
