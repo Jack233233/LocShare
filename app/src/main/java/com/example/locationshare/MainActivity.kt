@@ -111,11 +111,17 @@ class MainActivity : AppCompatActivity() {
 
     // 初始化 BottomSheet
     private fun initBottomSheet() {
+        // 设置圆角裁剪
+        binding.bottomSheet.apply {
+            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            clipToOutline = true
+        }
+
         bottomSheetBehavior = BottomSheetBehavior.from(binding.bottomSheet).apply {
             // 设置默认状态为折叠（只显示 peekHeight）
             state = BottomSheetBehavior.STATE_COLLAPSED
-            // 允许拖动展开
-            isDraggable = true
+            // 禁止整体拖动，只允许点击把手切换
+            isDraggable = false
             // 根据内容调整高度
             isFitToContents = true
             // 设置回调监听状态变化
@@ -550,11 +556,23 @@ class MainActivity : AppCompatActivity() {
             locationClient = AMapLocationClient(applicationContext).apply {
                 setLocationOption(AMapLocationClientOption().apply {
                     locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
-                    interval = 3000
+                    isOnceLocation = true  // 只定位一次
                     isNeedAddress = false
                 })
+                // 设置定位监听，获取到位置后移动到该位置
+                setLocationListener { location ->
+                    if (location.errorCode == 0) {
+                        val latLng = LatLng(location.latitude, location.longitude)
+                        runOnUiThread {
+                            aMap?.moveCamera(CameraUpdateFactory.changeLatLng(latLng))
+                            aMap?.moveCamera(CameraUpdateFactory.zoomTo(15f))
+                        }
+                    }
+                }
             }
             aMap?.isMyLocationEnabled = false
+            // 启动一次定位
+            locationClient?.startLocation()
         } catch (e: Exception) {
             e.printStackTrace()
         }

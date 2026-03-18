@@ -16,17 +16,18 @@
     <FrameLayout
         android:id="@+id/bottomSheet"
         android:layout_width="match_parent"
-        android:layout_height="500dp"
-        android:background="@android:color/white"
+        android:layout_height="350dp"
+        android:background="@drawable/bg_bottom_sheet_rounded"
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
         app:behavior_peekHeight="140dp"
-        app:behavior_hideable="false">
+        app:behavior_hideable="false"
+        android:clipToOutline="true">
 
         <WebView
             android:id="@+id/webView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@android:color/white" />
+            android:background="@android:color/transparent" />
 
     </FrameLayout>
 
