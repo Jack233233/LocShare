@@ -115,6 +115,9 @@ class MainActivity : AppCompatActivity() {
     private var friendTrackPolyline: com.amap.api.maps.model.Polyline? = null  // 轨迹线
     private val friendTrackPoints = mutableListOf<LatLng>()  // 轨迹点列表
 
+    // 好友位置信息（速度、方向）
+    private var friendLocationInfo: UserLocationInfo? = null
+
     // 路线标记
     private var routePolyline: com.amap.api.maps.model.Polyline? = null
     private var startMarker: Marker? = null
@@ -434,6 +437,18 @@ class MainActivity : AppCompatActivity() {
             binding.btnCloseDialog.setOnClickListener { hideRouteShareDialog() }
             binding.routeShareDialog.setOnClickListener { hideRouteShareDialog() }
 
+            // 定位到好友按钮
+            binding.btnLocateFriend.setOnClickListener {
+                friendLocationMarker?.let { marker ->
+                    marker.position?.let { position ->
+                        aMap?.animateCamera(CameraUpdateFactory.changeLatLng(position))
+                        hideRouteShareDialog()
+                    }
+                } ?: run {
+                    Toast.makeText(this, "好友位置尚未获取", Toast.LENGTH_SHORT).show()
+                }
+            }
+
             // 初始化弹窗信息
             binding.tvRouteName.text = "好友位置共享"
             binding.tvRouteEnd.text = "好友：${friendLocationData?.friendName}"
@@ -445,6 +460,13 @@ class MainActivity : AppCompatActivity() {
     // 显示好友位置弹窗
     private fun showFriendLocationDialog() {
         runOnUiThread {
+            val name = friendLocationData?.friendName ?: "--"
+            android.util.Log.d("RouteListener", "Showing friend location dialog, friendName=$name, data=$friendLocationData")
+            // 重新设置弹窗内容，确保显示最新数据
+            binding.tvRouteName.text = "好友位置共享"
+            binding.tvRouteEnd.text = "好友：$name"
+            binding.tvSharedWith.text = ""
+            binding.tvRemainingDistance.text = "--"
             binding.routeShareDialog.visibility = View.VISIBLE
         }
     }
@@ -455,6 +477,7 @@ class MainActivity : AppCompatActivity() {
 
         isFriendLocationMode = false
         friendLocationData = null
+        friendLocationInfo = null
 
         // 清除好友位置和轨迹
         friendLocationMarker?.remove()
@@ -484,6 +507,17 @@ class MainActivity : AppCompatActivity() {
         if (lat == 0.0 && lng == 0.0) return
 
         val latLng = LatLng(lat, lng)
+        val speed = data.optDouble("speed", 0.0).toFloat()
+        val bearing = data.optDouble("bearing", 0.0).toFloat()
+
+        // 保存好友位置信息
+        if (friendLocationInfo == null) {
+            friendLocationInfo = UserLocationInfo()
+        }
+        friendLocationInfo?.speed = speed
+        friendLocationInfo?.bearing = bearing
+        friendLocationInfo?.lastUpdateTime = System.currentTimeMillis()
+        android.util.Log.d("RouteListener", "Saved friend location info: speed=$speed, bearing=$bearing")
 
         // 添加到轨迹点列表
         friendTrackPoints.add(latLng)
@@ -573,6 +607,18 @@ class MainActivity : AppCompatActivity() {
             binding.btnCloseDialog.setOnClickListener { hideRouteShareDialog() }
             binding.routeShareDialog.setOnClickListener { hideRouteShareDialog() }
 
+            // 定位到好友按钮
+            binding.btnLocateFriend.setOnClickListener {
+                friendLocationMarker?.let { marker ->
+                    marker.position?.let { position ->
+                        aMap?.animateCamera(CameraUpdateFactory.changeLatLng(position))
+                        hideRouteShareDialog()
+                    }
+                } ?: run {
+                    Toast.makeText(this, "好友位置尚未获取", Toast.LENGTH_SHORT).show()
+                }
+            }
+
             // 初始化弹窗信息
             friendRouteData?.let { route ->
                 binding.tvRouteName.text = route.routeName
@@ -586,6 +632,13 @@ class MainActivity : AppCompatActivity() {
     // 显示好友路线弹窗
     private fun showFriendRouteDialog() {
         runOnUiThread {
+            // 重新设置弹窗内容，确保显示最新数据
+            friendRouteData?.let { route ->
+                binding.tvRouteName.text = route.routeName
+                binding.tvRouteEnd.text = "终点：${route.endName}"
+                binding.tvSharedWith.text = "共享好友：${route.friendName}"
+                binding.tvRemainingDistance.text = "--"
+            }
             binding.routeShareDialog.visibility = View.VISIBLE
         }
     }
@@ -596,6 +649,7 @@ class MainActivity : AppCompatActivity() {
 
         isFriendRouteMode = false
         friendRouteData = null
+        friendLocationInfo = null
 
         // 清除路线标记
         friendRoutePolyline?.remove()
@@ -634,17 +688,36 @@ class MainActivity : AppCompatActivity() {
 
             // 标记点击监听
             setOnMarkerClickListener { marker ->
+                // 先检查是否是普通用户标记
                 val clickedUserId = userMarkers.entries.find { it.value == marker }?.key
-                clickedUserId?.let { id ->
+                if (clickedUserId != null) {
                     val name = marker.title ?: "未知用户"
-                    val info = userLocationInfos[id]
+                    val info = userLocationInfos[clickedUserId]
                     val speed = info?.speed ?: 0f
                     val bearing = info?.bearing ?: 0f
                     webView.evaluateJavascript(
-                        "window.onMarkerClicked('$id', '${name.replace("'", "\\'")}', $speed, $bearing)",
+                        "window.onMarkerClicked('$clickedUserId', '${name.replace("'", "\\'")}', $speed, $bearing)",
                         null
                     )
+                    return@setOnMarkerClickListener true
                 }
+
+                // 检查是否是好友位置标记（好友共享或路线共享）
+                if (marker == friendLocationMarker) {
+                    val name = friendLocationData?.friendName
+                        ?: friendRouteData?.friendName
+                        ?: "好友"
+                    val info = friendLocationInfo
+                    val speed = info?.speed ?: 0f
+                    val bearing = info?.bearing ?: 0f
+                    android.util.Log.d("RouteListener", "Friend marker clicked: name=$name, speed=$speed, bearing=$bearing, info=$info")
+                    webView.evaluateJavascript(
+                        "window.onMarkerClicked('friend', '${name.replace("'", "\\'")}', $speed, $bearing)",
+                        null
+                    )
+                    return@setOnMarkerClickListener true
+                }
+
                 true
             }
         }
@@ -764,6 +837,8 @@ class MainActivity : AppCompatActivity() {
                         val friendName = data.optString("userName")
                         val friendId = data.optString("userId")
                         val pairRoomId = data.optString("pairRoomId", "")
+
+                        android.util.Log.d("RouteListener", "Received friend-location-started: userName=$friendName, userId=$friendId")
 
                         // 过滤自己发起的
                         if (friendId == userId) {
@@ -1008,6 +1083,7 @@ class MainActivity : AppCompatActivity() {
                                 emit("start-location-sharing", JSONObject().apply {
                                     put("pairRoomId", currentRoomId)
                                     put("sharedWith", friend.friendId)
+                                    put("userName", userName)
                                 })
                                 android.util.Log.d("LocationShare", "Notified friend ${friend.friendId} about location sharing")
                             }

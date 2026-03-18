@@ -348,7 +348,4 @@ window.onLocationUpdate = function(userId, lat, lng, name) {
     console.log('Location update:', userId, lat, lng, name);
 };
 
-// 标记点击回调
-window.onMarkerClicked = function(userId, userName) {
-    console.log('Marker clicked:', userId, userName);
-};
+// 标记点击回调 - 由 index.html 中的实现处理

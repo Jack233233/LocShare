@@ -147,12 +147,25 @@
                     android:textSize="14sp" />
             </LinearLayout>
 
+            <!-- 定位到好友按钮 -->
+            <TextView
+                android:id="@+id/btnLocateFriend"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/bg_btn_primary"
+                android:gravity="center"
+                android:text="定位到好友"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
             <!-- 停止按钮 -->
             <TextView
                 android:id="@+id/btnStopRouteShare"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/bg_btn_danger"
                 android:gravity="center"
                 android:text="停止共享"
