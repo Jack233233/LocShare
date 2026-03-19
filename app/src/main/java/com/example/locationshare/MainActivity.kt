@@ -486,6 +486,9 @@ class MainActivity : AppCompatActivity() {
         friendTrackPolyline = null
         friendTrackPoints.clear()
 
+        // 离开配对房间
+        routeListenerSocket?.emit("leave")
+
         // 恢复悬浮按钮
         binding.routeShareFab.visibility = View.GONE
         binding.routeShareFab.text = "📍 行程共享中"
