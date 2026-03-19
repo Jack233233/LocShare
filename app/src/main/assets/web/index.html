@@ -545,7 +545,11 @@
             if (isSharing) {
                 if (window.AndroidBridge) AndroidBridge.stopSharing();
             } else if (selectedFriend) {
-                if (window.AndroidBridge) AndroidBridge.startPairSharing('', selectedFriend.pairRoomId);
+                if (window.AndroidBridge) {
+                    const info = JSON.parse(AndroidBridge.getUserInfo());
+                    const userName = info.userName || '';
+                    AndroidBridge.startPairSharing(userName, selectedFriend.pairRoomId);
+                }
             }
         }
 
@@ -597,6 +601,10 @@
             if (currentMode === 'multi' && isSharing) {
                 updateRoomUsersList();
             }
+            // 如果信息窗口打开且是该用户，实时更新速度和方向
+            if (currentInfoWindowUserId === userId) {
+                window.updateInfoWindowIfOpen(userId, name, speed || 0, bearing || 0);
+            }
         };
 
         function updateRoomUsersList() {
@@ -619,11 +627,22 @@
             container.innerHTML = html;
         }
 
+        // 当前信息窗口显示的用户ID
+        let currentInfoWindowUserId = null;
+
         function onRoomUserClick(userId) {
             const user = roomUsers.get(userId);
             if (!user) return;
             if (window.AndroidBridge) AndroidBridge.moveToLocation(user.lat, user.lng);
+            currentInfoWindowUserId = userId;
             showInfoWindow(user.name, user.speed, user.bearing);
+        }
+
+        // 关闭信息窗口时清除当前用户ID
+        const originalCloseInfoWindow = closeInfoWindow;
+        closeInfoWindow = function() {
+            currentInfoWindowUserId = null;
+            originalCloseInfoWindow();
         }
 
         window.onUserLeave = function(userId) {
@@ -639,6 +658,8 @@
 
         // ========== 地图信息窗口 ==========
         window.onMarkerClicked = function(id, name, speed, bearing) {
+            // id 可能是 'friend'（好友共享模式）或 userId（多人模式）
+            currentInfoWindowUserId = id === 'friend' ? '__friend__' : id;
             showInfoWindow(name, speed, bearing);
         };
 
@@ -656,6 +677,21 @@
             document.getElementById('info-backdrop').classList.remove('show');
             document.getElementById('map-info-window').classList.remove('show');
         }
+
+        // 实时更新信息窗口（如果打开）
+        // userId: 多人模式为实际userId，好友模式为 '__friend__'
+        window.updateInfoWindowIfOpen = function(userId, name, speed, bearing) {
+            // 检查是否是当前显示的用户
+            if (currentInfoWindowUserId !== userId) return;
+
+            const infoWindow = document.getElementById('map-info-window');
+            // 只有当信息窗口显示时才更新
+            if (infoWindow.classList.contains('show')) {
+                document.getElementById('info-speed').textContent = Math.round(speed * 3.6);
+                const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+                document.getElementById('info-bearing').textContent = directions[Math.round(bearing / 45) % 8] || '北';
+            }
+        };
 
         // ========== 其他功能 ==========
         function showRoutes() {

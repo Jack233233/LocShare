@@ -496,19 +496,29 @@ class MainActivity : AppCompatActivity() {
 
     // 更新好友位置（接收方）
     private fun updateFriendLocationOnMap(data: JSONObject, isRouteMode: Boolean = true) {
+        android.util.Log.d("LocationUpdate", "=== updateFriendLocationOnMap ===")
+        android.util.Log.d("LocationUpdate", "原始数据: $data")
+
         val friendId = data.optString("userId")
         val lat = data.optDouble("lat", 0.0)
         val lng = data.optDouble("lng", 0.0)
-        val name = data.optString("userName",
+        val rawUserName = data.optString("userName")
+        val name = if (rawUserName.isNotEmpty()) rawUserName else {
             if (isRouteMode) friendRouteData?.friendName ?: "好友"
             else friendLocationData?.friendName ?: "好友"
-        )
+        }
+
+        android.util.Log.d("LocationUpdate", "解析结果: friendId=$friendId, rawUserName='$rawUserName', finalName='$name'")
 
         if (lat == 0.0 && lng == 0.0) return
 
         val latLng = LatLng(lat, lng)
-        val speed = data.optDouble("speed", 0.0).toFloat()
-        val bearing = data.optDouble("bearing", 0.0).toFloat()
+        val rawSpeed = data.optDouble("speed", -999.0)
+        val rawBearing = data.optDouble("bearing", -999.0)
+        val speed = if (rawSpeed != -999.0) rawSpeed.toFloat() else 0f
+        val bearing = if (rawBearing != -999.0) rawBearing.toFloat() else 0f
+
+        android.util.Log.d("LocationUpdate", "速度方位: rawSpeed=$rawSpeed, rawBearing=$rawBearing, finalSpeed=$speed, finalBearing=$bearing")
 
         // 保存好友位置信息
         if (friendLocationInfo == null) {
@@ -517,7 +527,14 @@ class MainActivity : AppCompatActivity() {
         friendLocationInfo?.speed = speed
         friendLocationInfo?.bearing = bearing
         friendLocationInfo?.lastUpdateTime = System.currentTimeMillis()
-        android.util.Log.d("RouteListener", "Saved friend location info: speed=$speed, bearing=$bearing")
+        android.util.Log.d("LocationUpdate", "保存到 friendLocationInfo: speed=${friendLocationInfo?.speed}, bearing=${friendLocationInfo?.bearing}")
+
+        // 实时更新信息窗口（如果打开）- 使用特殊标识符 '__friend__' 表示好友模式
+        runOnUiThread {
+            webView.evaluateJavascript(
+                "window.updateInfoWindowIfOpen('__friend__', '$name', $speed, $bearing)", null
+            )
+        }
 
         // 添加到轨迹点列表
         friendTrackPoints.add(latLng)
@@ -704,13 +721,21 @@ class MainActivity : AppCompatActivity() {
 
                 // 检查是否是好友位置标记（好友共享或路线共享）
                 if (marker == friendLocationMarker) {
+                    android.util.Log.d("MarkerClick", "=== 好友标记被点击 ===")
+                    android.util.Log.d("MarkerClick", "friendLocationData=$friendLocationData")
+                    android.util.Log.d("MarkerClick", "friendRouteData=$friendRouteData")
+                    android.util.Log.d("MarkerClick", "friendLocationInfo=$friendLocationInfo")
+
                     val name = friendLocationData?.friendName
                         ?: friendRouteData?.friendName
                         ?: "好友"
                     val info = friendLocationInfo
                     val speed = info?.speed ?: 0f
                     val bearing = info?.bearing ?: 0f
-                    android.util.Log.d("RouteListener", "Friend marker clicked: name=$name, speed=$speed, bearing=$bearing, info=$info")
+
+                    android.util.Log.d("MarkerClick", "最终结果: name='$name', speed=$speed, bearing=$bearing")
+                    android.util.Log.d("MarkerClick", "info.speed=${info?.speed}, info.bearing=${info?.bearing}")
+
                     webView.evaluateJavascript(
                         "window.onMarkerClicked('friend', '${name.replace("'", "\\'")}', $speed, $bearing)",
                         null
@@ -969,8 +994,15 @@ class MainActivity : AppCompatActivity() {
                     on("location-update") { args ->
                         val data = args[0] as JSONObject
                         val fromUserId = data.optString("userId")
+                        val fromUserName = data.optString("userName")
+                        val speed = data.optDouble("speed", -1.0)
+                        val bearing = data.optDouble("bearing", -1.0)
 
-                        android.util.Log.d("RouteListener", "Received location update from $fromUserId, friendRouteMode=$isFriendRouteMode, friendLocationMode=$isFriendLocationMode")
+                        android.util.Log.d("LocationRecv", "=== 接收位置更新 ===")
+                        android.util.Log.d("LocationRecv", "fromUserId=$fromUserId, fromUserName='$fromUserName'")
+                        android.util.Log.d("LocationRecv", "speed=$speed, bearing=$bearing")
+                        android.util.Log.d("LocationRecv", "friendRouteMode=$isFriendRouteMode, friendLocationMode=$isFriendLocationMode")
+                        android.util.Log.d("LocationRecv", "friendId=${friendRouteData?.friendId}, locationFriendId=${friendLocationData?.friendId}")
 
                         // 处理好友路线模式的位置
                         if (isFriendRouteMode && fromUserId == friendRouteData?.friendId) {
@@ -1081,6 +1113,7 @@ class MainActivity : AppCompatActivity() {
                             val friend = prefsManager.getFriends().find { it.pairRoomId == currentRoomId }
                             if (friend != null) {
                                 emit("start-location-sharing", JSONObject().apply {
+                                    put("userId", userId)
                                     put("pairRoomId", currentRoomId)
                                     put("sharedWith", friend.friendId)
                                     put("userName", userName)
@@ -1312,6 +1345,7 @@ class MainActivity : AppCompatActivity() {
                 info.lastUpdateTime = System.currentTimeMillis()
 
                 val data = JSONObject().apply {
+                    put("userId", userId)
                     put("lat", lat)
                     put("lng", lng)
                     put("accuracy", location.accuracy)
@@ -1319,6 +1353,14 @@ class MainActivity : AppCompatActivity() {
                     put("speed", speed)
                     put("bearing", bearing)
                 }
+
+                // 详细日志：检查发送的位置数据
+                android.util.Log.d("LocationSend", "=== 发送位置更新 ===")
+                android.util.Log.d("LocationSend", "userId=$userId, userName='$userName'")
+                android.util.Log.d("LocationSend", "lat=$lat, lng=$lng, accuracy=${location.accuracy}")
+                android.util.Log.d("LocationSend", "speed=$speed, bearing=$bearing")
+                android.util.Log.d("LocationSend", "socket connected=${socket?.connected()}, currentRoom=$currentRoomId")
+
                 socket?.emit("location-update", data)
 
                 runOnUiThread {
